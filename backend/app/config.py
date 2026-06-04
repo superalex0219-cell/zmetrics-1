@@ -1,0 +1,49 @@
+from functools import lru_cache
+
+from pydantic import computed_field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # Database
+    database_url: str = "postgresql+asyncpg://zmetrics:changeme@localhost:5432/zmetrics"
+
+    # Redis
+    redis_url: str = "redis://localhost:6379/0"
+
+    # Celery
+    celery_broker_url: str = "redis://localhost:6379/0"
+    celery_result_backend: str = "redis://localhost:6379/1"
+
+    # MinIO
+    minio_endpoint: str = "localhost:9000"
+    minio_access_key: str = "minioadmin"
+    minio_secret_key: str = "changeme"
+    minio_use_ssl: bool = False
+    minio_bucket_frames: str = "zmetrics-frames"
+    minio_bucket_artifacts: str = "zmetrics-artifacts"
+
+    # Keycloak OIDC
+    keycloak_url: str = "http://localhost:8080"
+    kc_realm: str = "zmetrics"
+    kc_client_id: str = "zmetrics-backend"
+
+    # CORS
+    backend_cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173"]
+
+    @computed_field
+    @property
+    def jwks_url(self) -> str:
+        return f"{self.keycloak_url}/realms/{self.kc_realm}/protocol/openid-connect/certs"
+
+    @computed_field
+    @property
+    def token_issuer(self) -> str:
+        return f"{self.keycloak_url}/realms/{self.kc_realm}"
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()

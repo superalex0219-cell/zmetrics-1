@@ -1,0 +1,79 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.installed.cfg
+*.egg
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Environment secrets
+.env
+.env.*
+!.env.example
+
+# Secrets dir
+secrets/
+infra/secrets/
+
+# Claude local runtime
+.claude/settings.local.json
+.claude/worktrees/
+
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+mobile/build/
+mobile/.dart_tool/
+mobile/android/.gradle/
+mobile/android/local.properties
+mobile/android/GeneratedPluginRegistrant.java
+mobile/ios/Pods/
+mobile/ios/.symlinks/
+*.dill
+
+# Docker / local volumes
+postgres_data/
+minio_data/
+redis_data/
+keycloak_data/
+
+# ML / data artifacts
+data/raw/
+data/interim/
+data/processed/
+models/
+artifacts/
+*.pt
+*.pth
+*.onnx
+*.ply
+*.pcd
+*.zip
+*.npy
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+*.pid

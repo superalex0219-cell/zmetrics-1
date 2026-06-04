@@ -1,0 +1,23 @@
+# Normalize line endings
+* text=auto eol=lf
+
+# Force LF for shell scripts (must run in Linux containers)
+*.sh text eol=lf
+infra/minio/*.sh text eol=lf
+
+# Force CRLF for Windows-specific files
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+
+# Binary files — no line ending conversion
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.ply binary
+*.pt binary
+*.onnx binary
+*.npy binary
+*.pdf binary
+*.zip binary

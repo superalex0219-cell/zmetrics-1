@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(infra/.env)",
+      "Read(infra/.env.*)",
+      "Read(secrets/**)",
+      "Read(infra/secrets/**)"
+    ],
+    "allow": [
+      "Bash(docker compose *)",
+      "Bash(docker-compose *)",
+      "Bash(alembic *)",
+      "Bash(pytest *)",
+      "Bash(git status)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git add docs/handoffs/*)",
+      "Bash(git commit -m *)",
+      "Bash(git checkout -b *)",
+      "Bash(git branch *)"
+    ]
+  }
+}

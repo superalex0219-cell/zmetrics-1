@@ -1,0 +1,50 @@
+name: zmetrics_mobile
+description: Quarry blast fragmentation analysis mobile app
+version: 1.0.0+1
+publish_to: none
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+  flutter: ">=3.10.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State management
+  flutter_bloc: ^8.1.5
+
+  # Auth (Keycloak OIDC PKCE)
+  flutter_appauth: ^6.0.0
+  flutter_secure_storage: ^9.0.0
+
+  # HTTP
+  dio: ^5.4.0
+
+  # Offline queue
+  sqflite: ^2.3.2
+  path: ^1.9.0
+
+  # Domain models
+  freezed_annotation: ^2.4.1
+  json_annotation: ^4.8.1
+
+  # Navigation
+  go_router: ^13.2.0
+
+  # Connectivity
+  connectivity_plus: ^6.0.3
+
+  # UI utilities
+  cupertino_icons: ^1.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  build_runner: ^2.4.8
+  freezed: ^2.4.7
+  json_serializable: ^6.7.1
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true

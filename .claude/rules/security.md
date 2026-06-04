@@ -1,0 +1,51 @@
+# Security Rules
+
+These rules apply to all code in the project.
+
+## Authentication and authorization
+
+- All `/api/v1/` endpoints MUST call `Depends(get_current_user)` or a role-requiring dependency
+- JWT validation MUST check: signature (RS256), expiry, issuer URL
+- JWKS MUST be fetched from Keycloak at runtime — never hardcode public keys
+- Role checks MUST be per-quarry (via `QuarryUserAccess`), not global
+- Revoked access (`revoked_at IS NOT NULL`) MUST be treated as no access
+
+## Secrets management
+
+- Secrets come from environment variables only
+- `.env` files are gitignored; never commit one
+- Docker Compose reads secrets from `infra/.env` (not committed)
+- Use `pydantic-settings` with `env_file=".env"` for local dev only
+- Production: inject env vars from a secrets manager (Vault, AWS Secrets Manager)
+
+## Input validation
+
+- All API inputs validated by Pydantic v2 schemas before reaching services
+- File uploads: validate content-type header AND magic bytes (not just extension)
+- MinIO keys: constructed server-side only, never passed directly from user input
+- UUIDs from path params: FastAPI auto-validates via `UUID` type annotation
+
+## Output security
+
+- Never expose `keycloak_sub`, raw passwords, or internal system errors in API responses
+- Presigned MinIO URLs: max 1 hour (`expires_in=3600`); never permanent public URLs
+- `AuditLog` endpoint: admin-only; paginated; no sensitive field values in response
+
+## Injection prevention
+
+- SQLAlchemy ORM queries prevent SQL injection by design — never use `text()` with f-strings
+- If raw SQL is needed, use `text("... :param")` with bound parameters
+- MinIO object keys are constructed from validated UUIDs — no path traversal possible
+- Celery task args: only pass UUIDs (strings) — never serialize full objects
+
+## CORS
+
+- `BACKEND_CORS_ORIGINS` is an explicit allowlist in `.env`
+- Never set `allow_origins=["*"]` in production
+- Credentials mode requires explicit origin (not wildcard)
+
+## Rate limiting
+
+Not yet implemented (M1+). When added:
+- Auth endpoints: stricter limits (Keycloak handles this)
+- File upload endpoints: per-user quota enforced in `StorageService`
