@@ -1,18 +1,19 @@
 # ZMetrics — STATUS
 
-**Last updated:** 2026-06-06 (curating chat)
-**Git HEAD:** `f734b97` — MOB-4 done
+**Last updated:** 2026-06-07 (curating chat)
+**Git HEAD:** `ebb28e5` — WEB-1 + MOB-DESIGN done
 
 ---
 
 ## TL;DR for the next session
 
-1. `git push origin main` — 17 commits ahead of origin/main, never pushed.
-2. **Rebuild containers** — backend image is stale:
+1. `git push origin main` — 19 commits ahead of origin/main, never pushed.
+2. **Rebuild containers** after WEB-1 + MOB-DESIGN:
    ```powershell
-   docker compose -f infra\docker-compose.yml build backend
-   docker compose -f infra\docker-compose.yml up -d --force-recreate backend
+   docker compose -f infra\docker-compose.yml build backend frontend
+   docker compose -f infra\docker-compose.yml up -d --force-recreate
    ```
+   Web UI available at http://localhost:5173 after rebuild.
 3. **Next task:** M5-a (rule engine in worker — P80 vs passport target → structured Recommendation).
 
 ---
@@ -23,7 +24,8 @@
 |-------|-------|-------|
 | **backend** | M1 + SEC-1 + BACK-SEC-2 complete | 53 tests. All IDOR gaps closed. AuditLog complete for role_assigned. Magic-byte validation on artifact upload. |
 | **worker** | M1 mock pipeline | 7 mock steps; auto-creates Report + Recommendation (`REQUIRES_HUMAN_REVIEW`). `db_models.py` hand-synced — SYNC risk (M6+). |
-| **mobile** | M1 + MOB-1/2/3/4 complete | 63 tests. OIDC PKCE live. Device/calibration picker. SyncProcessor wired. Job polling + navigate to reports. Report export via share sheet. |
+| **frontend** | WEB-1 complete | React + Vite + Keycloak OIDC. 7 screens wired to real API. Mock badge, read-only parameter_suggestions, review buttons. Dockerised. |
+| **mobile** | M1 + MOB-1/2/3/4 + MOB-DESIGN | 63 tests. Teal theme + dark AppBar. Russian labels. StatCard widget. |
 | **infra** | stale image | Needs `docker compose build backend` to pick up SEC-1 batch + GAP-1/2 changes. |
 
 ---
@@ -40,6 +42,8 @@
 | `796823a` | MOB-2: OIDC PKCE (flutter_appauth), restore() fix, login screen; 45 tests |
 | `760dbb5` | MOB-3: device picker, SyncProcessor wired, job polling, navigate to reports; 55 tests |
 | `f734b97` | MOB-4: report export (share_plus + path_provider); 63 tests |
+| `09ca465` | WEB-1: React frontend wired to backend; Keycloak OIDC; 7 screens live |
+| `ebb28e5` | MOB-DESIGN: teal theme + dark AppBar + Russian labels + StatCard |
 
 ---
 

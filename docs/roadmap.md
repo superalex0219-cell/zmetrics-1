@@ -1,6 +1,6 @@
 # ZMetrics — Roadmap
 
-Last sync: 2026-06-06 | HEAD: `f734b97`
+Last sync: 2026-06-07 | HEAD: `ebb28e5`
 
 ---
 
@@ -30,6 +30,19 @@ Last sync: 2026-06-06 | HEAD: `f734b97`
 - [x] SEC-2: `keycloak_sub` removed from API responses (`1d9ad72`)
 - [x] SEC-3: `dev-seed` gated behind `ENABLE_DEV_SEED` flag (`1d9ad72`)
 - [x] DB-1: `AnalysisJob.model_version_id` index + migration `6929bdaa526b` (`1d9ad72`)
+
+### WEB-1 — React Web Frontend (`frontend/`) ✅ (`09ca465`)
+- [x] React + Vite + TypeScript + Lucide + plain CSS (matches reference design)
+- [x] Keycloak OIDC browser redirect (check-sso + PKCE, `zmetrics-web` client)
+- [x] 7 screens wired to real API: Dashboard, Карьеры, Участки, Паспорта, Отчёты, Рекомендации, Auth
+- [x] Mock-pipeline badge (⚠ Синтетические данные), read-only parameter_suggestions
+- [x] JSON export with Bearer auth, review buttons (принять/отклонить/ознакомлен)
+- [x] Dockerised; `frontend` service in docker-compose; nginx proxy
+
+### MOB-DESIGN — Flutter visual refresh ✅ (`ebb28e5`)
+- [x] Primary color: teal `0xFF0F766E`; AppBar: `0xFF17202A` dark
+- [x] `StatCard` shared widget (teal icon, bold value)
+- [x] Russian labels: auth, quarries, sections, passports, reports, capture, offline banner
 
 ### M4 (partial) — Flutter Mobile (parallel, started ahead of M2/M3)
 - [x] Per-quarry RBAC: `AccessCubit`, `RoleLevel`, role-gated UI actions
