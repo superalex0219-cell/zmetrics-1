@@ -1,19 +1,19 @@
 # ZMetrics — STATUS
 
 **Last updated:** 2026-06-06 (curating chat)
-**Milestone:** M1 — **COMPLETE** (all features committed, GAP-1/GAP-2 closed, 44 tests)
-**Git HEAD:** `8a200b6` (feat(backend): GAP-1/GAP-2) — **1 commit ahead of origin/main** (push pending)
+**Milestone:** M1 — **COMPLETE** (all features committed, GAP-1/GAP-2 closed, security batch done, 49 tests)
+**Git HEAD:** `1d9ad72` (fix(backend): security hardening) — **3 commits ahead of origin/main** (push pending)
 
 ---
 
 ## TL;DR for the next session
 
-1. `git push` — local commit `8a200b6` waiting for origin.
-2. **Rebuild containers** to bake in GAP-1/GAP-2:
+1. `git push` — 3 local commits (`8a200b6`, `ad137d6`, `1d9ad72`) ahead of origin.
+2. **Rebuild containers** to bake in all changes:
    `docker compose -f infra\docker-compose.yml build backend && docker compose -f infra\docker-compose.yml up -d --force-recreate backend`
-3. **Next coding task:** Backend security hardening batch (P1/P2).
-   Spec: `docs/handoffs/2026-06-06-TASK-backend-security-hardening.md`.
-   Two real bugs + two cleanup items, all in `backend/` only.
+3. **Next coding task:** Mobile — wire analysis-result endpoint + remove dead workarounds.
+   Spec: `docs/handoffs/2026-06-06-TASK-mobile-report-wire-analysis-result.md`.
+   Granulometry (P10/P50/P80) invisible in live mode until this is done.
 
 ---
 
@@ -21,10 +21,10 @@
 
 | Layer | State | Notes |
 |-------|-------|-------|
-| **backend** | M1 + GAP-1/2 complete | 44 tests. `analysis_results` router + `ReportRead.analysis_method`. Security hardening batch queued. |
+| **backend** | M1 + security batch complete | 49 tests. SEC-1 IDOR fixed, SEC-2 keycloak_sub removed, SEC-3 dev-seed guarded, DB-1 index added. |
 | **worker** | M1 mock pipeline | 7 mock steps; auto-creates Report + Recommendation (REQUIRES_HUMAN_REVIEW). `db_models.py` hand-synced — SYNC risk. |
-| **mobile** | M1 complete (web+Android) | 41 tests. `report.dart` has `@Default(AnalysisMethod.real)` — dead default now that backend always sends the field; clean up in next mobile task. |
-| **infra** | stale image | Needs `docker compose build backend` to get GAP-1/2 + all M1 changes. |
+| **mobile** | M1 complete; live granulometry broken | 41 tests. `_withDerivedMethod` workaround + dead `@Default(AnalysisMethod.real)` not yet cleaned. `analysisResultId` not mapped → P10/P50/P80 invisible in live mode. Fix queued. |
+| **infra** | stale image | Needs `docker compose build backend` to get SEC-1/2/3/DB-1 + GAP-1/2 changes. |
 
 ---
 
@@ -36,10 +36,11 @@
 | ✅1 | GAP-2 | `analysis_method` on `ReportRead` (`8a200b6`) | backend | CLOSED — `from_report()` single source of truth |
 | ✅1 | GAP-1 | `GET /api/v1/analysis-results/{id}` (`8a200b6`) | backend | CLOSED — mobile report screen unblocked |
 | ✅2 | — | 5 missing endpoint tests (suite 31→44) | backend | CLOSED |
-| **P1** | SEC-1 | `add_comment`: `rec_id` not validated against `report_id` (IDOR) | backend | Any USER can comment on any recommendation by UUID — correctness bug |
-| **P2** | SEC-2 | `UserProfileRead` exposes `keycloak_sub` | backend | Violates security.md; internal identifier leak to admin callers |
-| **P2** | SEC-3 | `POST /admin/dev-seed` under `get_current_user` (not `require_any_admin`) | backend | Bootstrap necessity; needs explicit dev-only guard so it's documented |
-| **P3** | DB-1 | `AnalysisJob.model_version_id` missing `index=True` | backend + migration | outerjoin in `_report_read` + `list_quarry_reports` seq-scans without it |
+| ✅P1 | SEC-1 | `add_comment` IDOR fixed (`1d9ad72`) | backend | CLOSED — rec ownership validated |
+| ✅P2 | SEC-2 | `keycloak_sub` removed from `UserProfileRead` (`1d9ad72`) | backend | CLOSED |
+| ✅P2 | SEC-3 | `dev-seed` guarded by `enable_dev_seed` flag (`1d9ad72`) | backend | CLOSED |
+| ✅P3 | DB-1 | `AnalysisJob.model_version_id` index added (`1d9ad72`) | backend + migration | CLOSED — migration `6929bdaa526b` applied |
+| **P1** | MOB-1 | Granulometry invisible in live mode — `analysisResultId` not mapped | mobile | `GET /api/v1/analysis-results/{id}` exists but mobile never calls it |
 | 3 | — | Report export file-save (web/device) | mobile | Backend `GET /reports/{id}/export` exists; client plumbing not built |
 | M2 | AUD-001/003 | `ip_address` NULL; `GET /quarries/{id}` no per-quarry check | backend | Known pre-existing; deferred |
 | M2 | — | Per-section RBAC; Keycloak deactivation sync; PDF reports; capture flow | multi | Deferred by design |
@@ -73,7 +74,8 @@ docker compose -f infra\docker-compose.yml exec backend alembic current
 
 ## Recent handoffs (newest first)
 
-- `2026-06-06-TASK-backend-security-hardening.md` — next task spec (SEC-1/2/3 + DB-1)
+- `2026-06-06-TASK-mobile-report-wire-analysis-result.md` — next task spec (MOB-1 granulometry)
+- `2026-06-06-TASK-backend-security-hardening.md` — SEC-1/2/3 + DB-1 (completed `1d9ad72`)
 - `2026-06-06-TASK-backend-report-metrics.md` — GAP-1/GAP-2 spec (completed `8a200b6`)
 - `2026-06-06-m1-complete-uncommitted.md` — M1 done, committed `d162899`
 - `2026-06-06-mobile-web-backend-rbac.md` — Flutter app + per-quarry gating
