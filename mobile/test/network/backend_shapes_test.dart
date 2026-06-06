@@ -38,14 +38,16 @@ void main() {
     });
   });
 
-  test('ReportRead without analysis_method defaults to real (no badge)', () {
+  test('ReportRead without analysis_method defaults to mock (fail-safe badge)', () {
+    // Absent field → .mock so the warning badge is shown rather than hidden.
     final r = Report.fromJson({
       'id': 'r-1',
       'analysis_result_id': 'ar-1',
       'title': 'Granulometry report',
     });
-    expect(r.analysisMethod, AnalysisMethod.real);
-    expect(r.analysisMethod.isMock, isFalse);
+    expect(r.analysisMethod, AnalysisMethod.mock);
+    expect(r.analysisMethod.isMock, isTrue);
+    expect(r.analysisResultId, 'ar-1');
     expect(r.title, 'Granulometry report');
   });
 

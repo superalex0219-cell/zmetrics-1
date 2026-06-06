@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../shared/bloc/data_state.dart';
 import '../data/report_repository.dart';
+import '../domain/analysis_result.dart';
 import '../domain/recommendation.dart';
 import '../domain/report.dart';
 
@@ -16,10 +17,15 @@ class ReportCubit extends Cubit<DataState<Report>> {
     emit(const DataLoading());
     try {
       final report = await _repo.getReport(reportId);
-      // ReportRead does not nest recommendations — fetch them separately and
-      // merge. (For the mock repo this returns the same embedded list.)
       final recs = await _repo.listRecommendations(reportId);
-      emit(DataLoaded(report.copyWith(recommendations: recs)));
+      AnalysisResult? result;
+      if (report.analysisResultId != null) {
+        result = await _repo.getAnalysisResult(report.analysisResultId!);
+      }
+      emit(DataLoaded(report.copyWith(
+        recommendations: recs,
+        analysisResult: result,
+      )));
     } on ApiException catch (e) {
       emit(DataFailure(e.message));
     } catch (e) {

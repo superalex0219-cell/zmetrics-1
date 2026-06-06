@@ -29,6 +29,10 @@ abstract class ReportRepository {
     String recommendationId,
     String body,
   );
+
+  /// Fetches the granulometry result for a report.
+  /// Returns null if the result is not yet available (job still running).
+  Future<AnalysisResult?> getAnalysisResult(String analysisResultId);
 }
 
 /// In-memory stub. The seeded report is explicitly a MOCK-pipeline result
@@ -141,6 +145,14 @@ class MockReportRepository implements ReportRepository {
     _reports[reportId] = report.copyWith(recommendations: recs);
     return comment;
   }
+
+  @override
+  Future<AnalysisResult?> getAnalysisResult(String analysisResultId) async {
+    for (final r in _reports.values) {
+      if (r.analysisResult?.id == analysisResultId) return r.analysisResult;
+    }
+    return null;
+  }
 }
 
 /// Live implementation against the FastAPI backend.
@@ -149,23 +161,11 @@ class RemoteReportRepository implements ReportRepository {
 
   final Dio _dio;
 
-  /// ReportRead has no analysis-method field (TASK GAP-2). The worker prefixes
-  /// mock-pipeline report titles with "⚠ Mock pipeline" (mobile-auth-notes §6),
-  /// so derive the method from the title to keep the safety badge working.
-  Report _withDerivedMethod(Report r) {
-    final text = '${r.title ?? ''} ${r.summary ?? ''}';
-    return text.contains('Mock pipeline')
-        ? r.copyWith(analysisMethod: AnalysisMethod.mock)
-        : r;
-  }
-
   @override
   Future<List<Report>> listReports(String quarryId) async {
     try {
       final res = await _dio.get('/api/v1/quarries/$quarryId/reports');
-      return parseJsonList(res.data, Report.fromJson)
-          .map(_withDerivedMethod)
-          .toList(growable: false);
+      return parseJsonList(res.data, Report.fromJson);
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }
@@ -175,7 +175,7 @@ class RemoteReportRepository implements ReportRepository {
   Future<Report> getReport(String reportId) async {
     try {
       final res = await _dio.get('/api/v1/reports/$reportId');
-      return _withDerivedMethod(Report.fromJson(res.data as Map<String, dynamic>));
+      return Report.fromJson(res.data as Map<String, dynamic>);
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
     }
@@ -228,6 +228,18 @@ class RemoteReportRepository implements ReportRepository {
       return Comment.fromJson(res.data as Map<String, dynamic>);
     } on DioException catch (e) {
       throw ApiException.fromDio(e);
+    }
+  }
+
+  @override
+  Future<AnalysisResult?> getAnalysisResult(String analysisResultId) async {
+    try {
+      final res = await _dio.get('/api/v1/analysis-results/$analysisResultId');
+      return AnalysisResult.fromJson(res.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      final ex = ApiException.fromDio(e);
+      if (ex.statusCode == 404) return null;
+      throw ex;
     }
   }
 

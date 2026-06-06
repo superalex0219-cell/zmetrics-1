@@ -8,9 +8,10 @@ part of 'report.dart';
 
 _$ReportImpl _$$ReportImplFromJson(Map<String, dynamic> json) => _$ReportImpl(
       id: json['id'] as String,
+      analysisResultId: json['analysis_result_id'] as String?,
       analysisMethod: $enumDecodeNullable(
               _$AnalysisMethodEnumMap, json['analysis_method']) ??
-          AnalysisMethod.real,
+          AnalysisMethod.mock,
       title: json['title'] as String?,
       createdAt: json['created_at'] == null
           ? null
@@ -29,6 +30,7 @@ _$ReportImpl _$$ReportImplFromJson(Map<String, dynamic> json) => _$ReportImpl(
 Map<String, dynamic> _$$ReportImplToJson(_$ReportImpl instance) =>
     <String, dynamic>{
       'id': instance.id,
+      'analysis_result_id': instance.analysisResultId,
       'analysis_method': _$AnalysisMethodEnumMap[instance.analysisMethod]!,
       'title': instance.title,
       'created_at': instance.createdAt?.toIso8601String(),

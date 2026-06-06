@@ -25,11 +25,11 @@ enum AnalysisMethod {
 class Report with _$Report {
   const factory Report({
     required String id,
-    // The backend ReportRead does not expose an analysis method field yet, so
-    // default to `real` when absent (see TASK handoff §5). The mock repository
-    // sets this explicitly to `mock` to drive the synthetic-data badge.
+    @JsonKey(name: 'analysis_result_id') String? analysisResultId,
+    // Backend always sends analysis_method; default .mock is fail-safe —
+    // shows warning badge if the field is absent rather than silently hiding it.
     @JsonKey(name: 'analysis_method')
-    @Default(AnalysisMethod.real)
+    @Default(AnalysisMethod.mock)
     AnalysisMethod analysisMethod,
     String? title,
     @JsonKey(name: 'created_at') DateTime? createdAt,

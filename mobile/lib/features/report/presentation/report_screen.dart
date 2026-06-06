@@ -53,19 +53,11 @@ class _ReportBody extends StatelessWidget {
         if (result != null)
           _ResultSection(result: result)
         else
-          // Backend mode: ReportRead exposes only analysis_result_id and there
-          // is no GET-result-by-id endpoint yet (TASK handoff GAP-1).
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade200,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Text(
-              'Granulometry metrics (P10/P50/P80) are not available from the '
-              'backend yet — pending an analysis-result endpoint.',
-              style: TextStyle(fontSize: 12),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              'Analysis result not yet available — job may still be running.',
+              style: TextStyle(color: Colors.grey),
             ),
           ),
         const SizedBox(height: 16),

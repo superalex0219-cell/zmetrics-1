@@ -20,10 +20,11 @@ Report _$ReportFromJson(Map<String, dynamic> json) {
 
 /// @nodoc
 mixin _$Report {
-  String get id =>
-      throw _privateConstructorUsedError; // The backend ReportRead does not expose an analysis method field yet, so
-// default to `real` when absent (see TASK handoff §5). The mock repository
-// sets this explicitly to `mock` to drive the synthetic-data badge.
+  String get id => throw _privateConstructorUsedError;
+  @JsonKey(name: 'analysis_result_id')
+  String? get analysisResultId =>
+      throw _privateConstructorUsedError; // Backend always sends analysis_method; default .mock is fail-safe —
+// shows warning badge if the field is absent rather than silently hiding it.
   @JsonKey(name: 'analysis_method')
   AnalysisMethod get analysisMethod => throw _privateConstructorUsedError;
   String? get title => throw _privateConstructorUsedError;
@@ -51,6 +52,7 @@ abstract class $ReportCopyWith<$Res> {
   @useResult
   $Res call(
       {String id,
+      @JsonKey(name: 'analysis_result_id') String? analysisResultId,
       @JsonKey(name: 'analysis_method') AnalysisMethod analysisMethod,
       String? title,
       @JsonKey(name: 'created_at') DateTime? createdAt,
@@ -77,6 +79,7 @@ class _$ReportCopyWithImpl<$Res, $Val extends Report>
   @override
   $Res call({
     Object? id = null,
+    Object? analysisResultId = freezed,
     Object? analysisMethod = null,
     Object? title = freezed,
     Object? createdAt = freezed,
@@ -89,6 +92,10 @@ class _$ReportCopyWithImpl<$Res, $Val extends Report>
           ? _value.id
           : id // ignore: cast_nullable_to_non_nullable
               as String,
+      analysisResultId: freezed == analysisResultId
+          ? _value.analysisResultId
+          : analysisResultId // ignore: cast_nullable_to_non_nullable
+              as String?,
       analysisMethod: null == analysisMethod
           ? _value.analysisMethod
           : analysisMethod // ignore: cast_nullable_to_non_nullable
@@ -140,6 +147,7 @@ abstract class _$$ReportImplCopyWith<$Res> implements $ReportCopyWith<$Res> {
   @useResult
   $Res call(
       {String id,
+      @JsonKey(name: 'analysis_result_id') String? analysisResultId,
       @JsonKey(name: 'analysis_method') AnalysisMethod analysisMethod,
       String? title,
       @JsonKey(name: 'created_at') DateTime? createdAt,
@@ -165,6 +173,7 @@ class __$$ReportImplCopyWithImpl<$Res>
   @override
   $Res call({
     Object? id = null,
+    Object? analysisResultId = freezed,
     Object? analysisMethod = null,
     Object? title = freezed,
     Object? createdAt = freezed,
@@ -177,6 +186,10 @@ class __$$ReportImplCopyWithImpl<$Res>
           ? _value.id
           : id // ignore: cast_nullable_to_non_nullable
               as String,
+      analysisResultId: freezed == analysisResultId
+          ? _value.analysisResultId
+          : analysisResultId // ignore: cast_nullable_to_non_nullable
+              as String?,
       analysisMethod: null == analysisMethod
           ? _value.analysisMethod
           : analysisMethod // ignore: cast_nullable_to_non_nullable
@@ -210,8 +223,9 @@ class __$$ReportImplCopyWithImpl<$Res>
 class _$ReportImpl implements _Report {
   const _$ReportImpl(
       {required this.id,
+      @JsonKey(name: 'analysis_result_id') this.analysisResultId,
       @JsonKey(name: 'analysis_method')
-      this.analysisMethod = AnalysisMethod.real,
+      this.analysisMethod = AnalysisMethod.mock,
       this.title,
       @JsonKey(name: 'created_at') this.createdAt,
       this.summary,
@@ -224,9 +238,11 @@ class _$ReportImpl implements _Report {
 
   @override
   final String id;
-// The backend ReportRead does not expose an analysis method field yet, so
-// default to `real` when absent (see TASK handoff §5). The mock repository
-// sets this explicitly to `mock` to drive the synthetic-data badge.
+  @override
+  @JsonKey(name: 'analysis_result_id')
+  final String? analysisResultId;
+// Backend always sends analysis_method; default .mock is fail-safe —
+// shows warning badge if the field is absent rather than silently hiding it.
   @override
   @JsonKey(name: 'analysis_method')
   final AnalysisMethod analysisMethod;
@@ -251,7 +267,7 @@ class _$ReportImpl implements _Report {
 
   @override
   String toString() {
-    return 'Report(id: $id, analysisMethod: $analysisMethod, title: $title, createdAt: $createdAt, summary: $summary, analysisResult: $analysisResult, recommendations: $recommendations)';
+    return 'Report(id: $id, analysisResultId: $analysisResultId, analysisMethod: $analysisMethod, title: $title, createdAt: $createdAt, summary: $summary, analysisResult: $analysisResult, recommendations: $recommendations)';
   }
 
   @override
@@ -260,6 +276,8 @@ class _$ReportImpl implements _Report {
         (other.runtimeType == runtimeType &&
             other is _$ReportImpl &&
             (identical(other.id, id) || other.id == id) &&
+            (identical(other.analysisResultId, analysisResultId) ||
+                other.analysisResultId == analysisResultId) &&
             (identical(other.analysisMethod, analysisMethod) ||
                 other.analysisMethod == analysisMethod) &&
             (identical(other.title, title) || other.title == title) &&
@@ -277,6 +295,7 @@ class _$ReportImpl implements _Report {
   int get hashCode => Object.hash(
       runtimeType,
       id,
+      analysisResultId,
       analysisMethod,
       title,
       createdAt,
@@ -303,6 +322,7 @@ class _$ReportImpl implements _Report {
 abstract class _Report implements Report {
   const factory _Report(
       {required final String id,
+      @JsonKey(name: 'analysis_result_id') final String? analysisResultId,
       @JsonKey(name: 'analysis_method') final AnalysisMethod analysisMethod,
       final String? title,
       @JsonKey(name: 'created_at') final DateTime? createdAt,
@@ -313,10 +333,12 @@ abstract class _Report implements Report {
   factory _Report.fromJson(Map<String, dynamic> json) = _$ReportImpl.fromJson;
 
   @override
-  String
-      get id; // The backend ReportRead does not expose an analysis method field yet, so
-// default to `real` when absent (see TASK handoff §5). The mock repository
-// sets this explicitly to `mock` to drive the synthetic-data badge.
+  String get id;
+  @override
+  @JsonKey(name: 'analysis_result_id')
+  String?
+      get analysisResultId; // Backend always sends analysis_method; default .mock is fail-safe —
+// shows warning badge if the field is absent rather than silently hiding it.
   @override
   @JsonKey(name: 'analysis_method')
   AnalysisMethod get analysisMethod;
