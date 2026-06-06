@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.roles import RoleLevel, require_quarry_role
@@ -9,20 +9,23 @@ from app.db.models.passport import BlastPassport, PassportStatus
 from app.db.models.user import UserProfile
 from app.db.session import get_db
 from app.dependencies import get_current_user
+from app.schemas.common import PaginatedResponse
 from app.schemas.passport import BlastPassportCreate, BlastPassportRead, BlastPassportUpdate
 
 router = APIRouter()
 
 
-@router.get("", response_model=list[BlastPassportRead])
+@router.get("", response_model=PaginatedResponse[BlastPassportRead])
 async def list_passports(
     quarry_id: UUID,
     section_id: UUID | None = None,
+    page: int = 1,
+    page_size: int = 20,
     current_user: UserProfile = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> list[BlastPassport]:
+) -> PaginatedResponse[BlastPassportRead]:
     from app.db.models.quarry import SiteSection
-    query = (
+    base = (
         select(BlastPassport)
         .join(SiteSection, SiteSection.id == BlastPassport.site_section_id)
         .where(
@@ -31,9 +34,12 @@ async def list_passports(
         )
     )
     if section_id:
-        query = query.where(BlastPassport.site_section_id == section_id)
-    result = await db.execute(query)
-    return list(result.scalars().all())
+        base = base.where(BlastPassport.site_section_id == section_id)
+    total = (await db.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
+    items = list((await db.execute(
+        base.offset((page - 1) * page_size).limit(page_size)
+    )).scalars().all())
+    return PaginatedResponse(items=items, total=total, page=page, page_size=page_size)
 
 
 @router.post("", response_model=BlastPassportRead, status_code=status.HTTP_201_CREATED)
@@ -108,6 +114,34 @@ async def approve_passport(
     passport.status = PassportStatus.APPROVED
     passport.approved_by_id = current_user.id
     await _write_audit(db, current_user.id, passport, "status_changed", "SUBMITTED", "APPROVED")
+    return passport
+
+
+@router.post("/{passport_id}/activate", response_model=BlastPassportRead)
+async def activate_passport(
+    quarry_id: UUID,
+    passport_id: UUID,
+    current_user: UserProfile = Depends(require_quarry_role(RoleLevel.ADMIN)),
+    db: AsyncSession = Depends(get_db),
+) -> BlastPassport:
+    passport = await _get_passport_or_404(passport_id, db)
+    _assert_status(passport, PassportStatus.APPROVED, "activate")
+    passport.status = PassportStatus.ACTIVE
+    await _write_audit(db, current_user.id, passport, "status_changed", "APPROVED", "ACTIVE")
+    return passport
+
+
+@router.post("/{passport_id}/complete", response_model=BlastPassportRead)
+async def complete_passport(
+    quarry_id: UUID,
+    passport_id: UUID,
+    current_user: UserProfile = Depends(require_quarry_role(RoleLevel.ADMIN)),
+    db: AsyncSession = Depends(get_db),
+) -> BlastPassport:
+    passport = await _get_passport_or_404(passport_id, db)
+    _assert_status(passport, PassportStatus.ACTIVE, "complete")
+    passport.status = PassportStatus.COMPLETED
+    await _write_audit(db, current_user.id, passport, "status_changed", "ACTIVE", "COMPLETED")
     return passport
 
 

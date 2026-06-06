@@ -1,6 +1,6 @@
 """
 Minimal SQLAlchemy models for the worker.
-Must stay in sync with backend/app/db/models/analysis.py and report.py.
+Must stay in sync with backend/app/db/models/ — analysis.py, report.py, capture.py.
 Only the tables the worker reads/writes are defined here.
 """
 
@@ -64,5 +64,54 @@ class AnalysisResult(Base):
     confidence_score: Mapped[float | None] = mapped_column(Numeric(5, 4), nullable=True)
     confidence_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     size_distribution: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class CaptureSession(Base):
+    __tablename__ = "capture_session"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    captured_by_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+
+
+class RecommendationStatus(str, enum.Enum):
+    REQUIRES_HUMAN_REVIEW = "requires_human_review"
+    DRAFT = "draft"
+    REVIEWED = "reviewed"
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
+
+
+class Report(Base):
+    __tablename__ = "report"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    analysis_result_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("analysis_result.id"), nullable=False, unique=True
+    )
+    generated_by_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    report_type: Mapped[str] = mapped_column(String(100), nullable=False, default="granulometric")
+    title: Mapped[str] = mapped_column(String(500), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class Recommendation(Base):
+    __tablename__ = "recommendation"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    report_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("report.id"), nullable=False
+    )
+    generated_by_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    # SAFETY: always set to REQUIRES_HUMAN_REVIEW on creation.
+    status: Mapped[RecommendationStatus] = mapped_column(
+        SAEnum(RecommendationStatus, name="recommendation_status", create_type=False),
+        nullable=False,
+        default=RecommendationStatus.REQUIRES_HUMAN_REVIEW,
+    )
+    recommendation_text: Mapped[str] = mapped_column(Text, nullable=False)
+    parameter_suggestions: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

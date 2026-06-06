@@ -1,26 +1,30 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.roles import RoleLevel, require_quarry_role
+from app.auth.roles import RoleLevel, require_any_admin, require_quarry_role
 from app.db.models.quarry import Quarry, SiteSection
 from app.db.models.user import UserProfile
 from app.db.session import get_db
 from app.dependencies import get_current_user
+from app.schemas.common import PaginatedResponse
 from app.schemas.quarry import QuarryCreate, QuarryRead, QuarryUpdate, SiteSectionCreate, SiteSectionRead
+from app.schemas.report import ReportRead
 
 router = APIRouter()
 
 
-@router.get("", response_model=list[QuarryRead])
+@router.get("", response_model=PaginatedResponse[QuarryRead])
 async def list_quarries(
+    page: int = 1,
+    page_size: int = 20,
     current_user: UserProfile = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> list[Quarry]:
+) -> PaginatedResponse[QuarryRead]:
     from app.db.models.user import QuarryUserAccess
-    result = await db.execute(
+    base = (
         select(Quarry)
         .join(QuarryUserAccess, QuarryUserAccess.quarry_id == Quarry.id)
         .where(
@@ -29,13 +33,17 @@ async def list_quarries(
             Quarry.deleted_at.is_(None),
         )
     )
-    return list(result.scalars().all())
+    total = (await db.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
+    items = list((await db.execute(
+        base.offset((page - 1) * page_size).limit(page_size)
+    )).scalars().all())
+    return PaginatedResponse(items=items, total=total, page=page, page_size=page_size)
 
 
 @router.post("", response_model=QuarryRead, status_code=status.HTTP_201_CREATED)
 async def create_quarry(
     body: QuarryCreate,
-    current_user: UserProfile = Depends(get_current_user),
+    current_user: UserProfile = Depends(require_any_admin),
     db: AsyncSession = Depends(get_db),
 ) -> Quarry:
     quarry = Quarry(**body.model_dump())
@@ -77,19 +85,54 @@ async def update_quarry(
     return quarry
 
 
-@router.get("/{quarry_id}/sections", response_model=list[SiteSectionRead])
+@router.get("/{quarry_id}/sections", response_model=PaginatedResponse[SiteSectionRead])
 async def list_site_sections(
     quarry_id: UUID,
+    page: int = 1,
+    page_size: int = 20,
     current_user: UserProfile = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> list[SiteSection]:
-    result = await db.execute(
-        select(SiteSection).where(
-            SiteSection.quarry_id == quarry_id,
-            SiteSection.deleted_at.is_(None),
-        )
+) -> PaginatedResponse[SiteSectionRead]:
+    base = select(SiteSection).where(
+        SiteSection.quarry_id == quarry_id,
+        SiteSection.deleted_at.is_(None),
     )
-    return list(result.scalars().all())
+    total = (await db.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
+    items = list((await db.execute(
+        base.offset((page - 1) * page_size).limit(page_size)
+    )).scalars().all())
+    return PaginatedResponse(items=items, total=total, page=page, page_size=page_size)
+
+
+@router.get("/{quarry_id}/reports", response_model=PaginatedResponse[ReportRead])
+async def list_quarry_reports(
+    quarry_id: UUID,
+    page: int = 1,
+    page_size: int = 20,
+    current_user: UserProfile = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> PaginatedResponse[ReportRead]:
+    from app.db.models.analysis import AnalysisJob, AnalysisResult
+    from app.db.models.blast import BlastEvent
+    from app.db.models.capture import CaptureSession
+    from app.db.models.passport import BlastPassport
+    from app.db.models.report import Report
+    base = (
+        select(Report)
+        .join(AnalysisResult, AnalysisResult.id == Report.analysis_result_id)
+        .join(AnalysisJob, AnalysisJob.id == AnalysisResult.job_id)
+        .join(CaptureSession, CaptureSession.id == AnalysisJob.capture_session_id)
+        .join(BlastEvent, BlastEvent.id == CaptureSession.blast_event_id)
+        .join(BlastPassport, BlastPassport.id == BlastEvent.passport_id)
+        .join(SiteSection, SiteSection.id == BlastPassport.site_section_id)
+        .where(SiteSection.quarry_id == quarry_id)
+        .order_by(Report.created_at.desc())
+    )
+    total = (await db.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
+    items = list((await db.execute(
+        base.offset((page - 1) * page_size).limit(page_size)
+    )).scalars().all())
+    return PaginatedResponse(items=items, total=total, page=page, page_size=page_size)
 
 
 @router.post("/{quarry_id}/sections", response_model=SiteSectionRead, status_code=status.HTTP_201_CREATED)

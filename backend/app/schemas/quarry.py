@@ -28,7 +28,7 @@ class QuarryRead(BaseModel):
 
 
 class SiteSectionCreate(BaseModel):
-    quarry_id: UUID
+    quarry_id: UUID | None = None  # ignored: quarry_id comes from path param
     name: str
     block_number: str | None = None
     description: str | None = None

@@ -105,6 +105,8 @@ async def _run_pipeline_async(job_id: UUID) -> dict:
             job.status = _JobStatus("completed")
             job.completed_at = datetime.now(tz=timezone.utc)
             job.pipeline_log = pipeline_log
+
+            await _create_report_and_recommendation(db, job_id, job.capture_session_id)
             await db.commit()
 
             logger.info("pipeline_completed", job_id=str(job_id), steps=len(step_results))
@@ -141,6 +143,84 @@ async def _load_job(db, job_id: UUID):
         # Fallback: use raw SQL to update job status
         logger.warning("pipeline_model_import_failed", job_id=str(job_id))
         return None
+
+
+async def _create_report_and_recommendation(
+    db,
+    job_id: UUID,
+    capture_session_id: UUID,
+) -> None:
+    """
+    Create Report + Recommendation after successful pipeline.
+    SAFETY: Recommendation always created with status=REQUIRES_HUMAN_REVIEW.
+    """
+    from sqlalchemy import select
+
+    from app.db_models import (
+        AnalysisResult,
+        CaptureSession,
+        Recommendation,
+        RecommendationStatus,
+        Report,
+    )
+
+    # Get AnalysisResult created by granulometry step
+    ar = (await db.execute(
+        select(AnalysisResult).where(AnalysisResult.job_id == job_id)
+    )).scalar_one_or_none()
+    if ar is None:
+        logger.warning("pipeline_no_analysis_result", job_id=str(job_id))
+        return
+
+    # Get who captured this session (required for Report.generated_by_id)
+    session = (await db.execute(
+        select(CaptureSession).where(CaptureSession.id == capture_session_id)
+    )).scalar_one_or_none()
+    if session is None:
+        logger.warning("pipeline_no_capture_session", job_id=str(job_id))
+        return
+
+    p10 = float(ar.p10_mm) if ar.p10_mm is not None else 0.0
+    p50 = float(ar.p50_mm) if ar.p50_mm is not None else 0.0
+    p80 = float(ar.p80_mm) if ar.p80_mm is not None else 0.0
+    conf = float(ar.confidence_score) if ar.confidence_score is not None else 0.0
+
+    report = Report(
+        analysis_result_id=ar.id,
+        generated_by_id=session.captured_by_id,
+        report_type="granulometric",
+        title=f"⚠ Mock pipeline — Granulometric Analysis (P80={p80:.0f}mm)",
+    )
+    db.add(report)
+    await db.flush()
+
+    rec_text = (
+        f"⚠ Mock pipeline — results are synthetic. "
+        f"P10={p10:.0f}mm, P50={p50:.0f}mm, P80={p80:.0f}mm. "
+        f"Confidence={conf:.2f}. "
+    )
+    if conf < 0.5:
+        rec_text += "Low confidence — manual re-capture strongly recommended. "
+    rec_text += "Review fragmentation metrics and compare against passport target before any design changes."
+
+    # SAFETY: always REQUIRES_HUMAN_REVIEW — never auto-accept.
+    recommendation = Recommendation(
+        report_id=report.id,
+        generated_by_id=session.captured_by_id,
+        status=RecommendationStatus.REQUIRES_HUMAN_REVIEW,
+        recommendation_text=rec_text,
+        parameter_suggestions=None,
+    )
+    db.add(recommendation)
+    await db.flush()
+
+    logger.info(
+        "pipeline_report_created",
+        job_id=str(job_id),
+        report_id=str(report.id),
+        p80=p80,
+        confidence=conf,
+    )
 
 
 class _JobStatus:

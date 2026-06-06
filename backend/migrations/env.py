@@ -7,7 +7,8 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from app.config import get_settings
-from app.db.base import Base  # noqa: F401 — imports all models
+from app.db.base import Base
+import app.db.models  # noqa: F401 — registers all models with Base.metadata
 
 config = context.config
 settings = get_settings()
@@ -20,6 +21,15 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
+# Only manage tables defined in our models — ignore Keycloak and other DB tenants.
+_our_tables = set(target_metadata.tables.keys())
+
+
+def include_object(obj, name, type_, reflected, compare_to):
+    if type_ == "table":
+        return name in _our_tables
+    return True
+
 
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
@@ -29,6 +39,7 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         compare_type=True,
+        include_object=include_object,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -39,6 +50,7 @@ def do_run_migrations(connection: Connection) -> None:
         connection=connection,
         target_metadata=target_metadata,
         compare_type=True,
+        include_object=include_object,
     )
     with context.begin_transaction():
         context.run_migrations()

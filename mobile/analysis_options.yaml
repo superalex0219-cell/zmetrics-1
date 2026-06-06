@@ -1,0 +1,16 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  errors:
+    # freezed places @JsonKey on the factory constructor parameters; the
+    # analyzer flags this target as invalid even though json_serializable reads
+    # it correctly. This is the suppression recommended by the freezed docs.
+    invalid_annotation_target: ignore
+  exclude:
+    - "**/*.freezed.dart"
+    - "**/*.g.dart"
+
+linter:
+  rules:
+    prefer_const_constructors: true
+    prefer_final_fields: true

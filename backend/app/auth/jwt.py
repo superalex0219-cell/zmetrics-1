@@ -54,6 +54,7 @@ async def decode_token(token: str) -> dict[str, Any]:
             jwks,
             algorithms=["RS256"],
             options={"verify_aud": False},
+            issuer=settings.token_issuer,
         )
         return payload
     except ExpiredSignatureError:

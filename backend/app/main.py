@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.db.session import engine
-from app.routers import admin, analysis, health, passports, quarries, reports
+from app.routers import admin, analysis, blast_events, capture_sessions, devices, health, me, passports, quarries, reports
 
 logger = structlog.get_logger()
 settings = get_settings()
@@ -38,6 +38,8 @@ app.add_middleware(
 # Health (no auth)
 app.include_router(health.router)
 
+app.include_router(me.router, prefix="/api/v1/me", tags=["me"])
+
 # Core API
 app.include_router(quarries.router, prefix="/api/v1/quarries", tags=["quarries"])
 app.include_router(
@@ -52,3 +54,14 @@ app.include_router(
 )
 app.include_router(reports.router, prefix="/api/v1/reports", tags=["reports"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
+app.include_router(devices.router, prefix="/api/v1/devices", tags=["devices"])
+app.include_router(
+    blast_events.router,
+    prefix="/api/v1/quarries/{quarry_id}/passports/{passport_id}",
+    tags=["blast-events"],
+)
+app.include_router(
+    capture_sessions.router,
+    prefix="/api/v1/capture-sessions",
+    tags=["capture-sessions"],
+)

@@ -15,6 +15,11 @@ class UserProfileRead(BaseModel):
     created_at: datetime
 
 
+class UserProfileUpdate(BaseModel):
+    full_name: str | None = None
+    is_active: bool | None = None
+
+
 class QuarryAccessCreate(BaseModel):
     user_id: UUID
     quarry_id: UUID

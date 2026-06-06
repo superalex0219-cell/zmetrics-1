@@ -77,3 +77,59 @@ def require_quarry_role(minimum_level: RoleLevel) -> Callable:
         return current_user
 
     return check_role
+
+
+def _build_require_any_admin():
+    """Dependency: caller must be ADMIN (level 4) on at least one quarry."""
+    from app.dependencies import get_current_user
+    from app.db.models.user import QuarryUserAccess, Role, UserProfile
+
+    async def _dep(
+        current_user: UserProfile = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+    ) -> UserProfile:
+        result = await db.execute(
+            select(QuarryUserAccess)
+            .join(Role, Role.id == QuarryUserAccess.role_id)
+            .where(
+                QuarryUserAccess.user_id == current_user.id,
+                QuarryUserAccess.revoked_at.is_(None),
+                Role.level >= RoleLevel.ADMIN,
+            )
+        )
+        if result.scalar_one_or_none() is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Admin access required",
+            )
+        return current_user
+
+    return _dep
+
+
+require_any_admin = _build_require_any_admin()
+
+
+async def check_quarry_access(
+    db: AsyncSession,
+    user_id: "uuid.UUID",
+    quarry_id: "uuid.UUID",
+    minimum_level: RoleLevel,
+) -> None:
+    """Raise HTTP 403 if user lacks minimum_level on quarry_id."""
+    from app.db.models.user import QuarryUserAccess, Role
+    result = await db.execute(
+        select(Role.level)
+        .join(QuarryUserAccess, QuarryUserAccess.role_id == Role.id)
+        .where(
+            QuarryUserAccess.user_id == user_id,
+            QuarryUserAccess.quarry_id == quarry_id,
+            QuarryUserAccess.revoked_at.is_(None),
+        )
+    )
+    level = result.scalar_one_or_none()
+    if level is None or level < minimum_level:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Requires role level {minimum_level.name} or higher",
+        )

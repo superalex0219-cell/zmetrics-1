@@ -11,6 +11,15 @@ from collections.abc import AsyncGenerator
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
+# SQLite does not know the JSONB type — render it as TEXT for test schema creation.
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.ext.compiler import compiles
+
+
+@compiles(JSONB, "sqlite")
+def _jsonb_as_text(element, compiler, **kw):  # noqa: ARG001
+    return "TEXT"
+
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
@@ -77,7 +86,7 @@ async def client(db_session: AsyncSession):
 
     app.dependency_overrides[get_db] = override_get_db
 
-    with patch("app.auth.jwt.decode_token", new_callable=AsyncMock) as mock_decode:
+    with patch("app.dependencies.decode_token", new_callable=AsyncMock) as mock_decode:
         mock_decode.return_value = make_jwt_payload(roles=["zmetrics-admin"])
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
             yield ac

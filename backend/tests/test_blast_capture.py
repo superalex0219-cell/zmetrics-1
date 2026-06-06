@@ -1,0 +1,443 @@
+"""Tests: Device, BlastEvent, CaptureSession, and Artifact upload."""
+
+from __future__ import annotations
+
+import io
+import uuid
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db.models.blast import BlastEvent, Calibration, Device
+from app.db.models.capture import CaptureSession
+from app.db.models.passport import BlastPassport, PassportStatus
+from app.db.models.quarry import Quarry, SiteSection
+from app.db.models.user import QuarryUserAccess, Role, UserProfile
+
+
+# ── helpers ───────────────────────────────────────────────────────────────────
+
+
+def _jwt(sub: str, email: str = "u@test.local") -> dict:
+    return {"sub": sub, "email": email, "name": "Test User", "realm_access": {"roles": []}}
+
+
+@asynccontextmanager
+async def _client(db_session: AsyncSession, jwt_payload: dict):
+    from app.db.session import get_db
+    from app.main import app
+
+    async def override_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_db
+    try:
+        with patch("app.dependencies.decode_token", new_callable=AsyncMock) as mock_decode:
+            mock_decode.return_value = jwt_payload
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as ac:
+                yield ac
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ── fixtures ──────────────────────────────────────────────────────────────────
+
+
+@pytest_asyncio.fixture
+async def blaster_user(db_session: AsyncSession):
+    """User + quarry + section + blaster role + access + approved passport."""
+    sub = f"blaster-{uuid.uuid4()}"
+    quarry = Quarry(name="Blast Quarry")
+    db_session.add(quarry)
+    await db_session.flush()
+
+    section = SiteSection(quarry_id=quarry.id, name="Block B", block_number="B1")
+    db_session.add(section)
+
+    role = Role(name=f"blaster-{uuid.uuid4()}", level=3)
+    db_session.add(role)
+    await db_session.flush()
+
+    user = UserProfile(keycloak_sub=sub, email=f"{sub}@test.local", full_name="Blaster User")
+    db_session.add(user)
+    await db_session.flush()
+
+    access = QuarryUserAccess(user_id=user.id, quarry_id=quarry.id, role_id=role.id)
+    db_session.add(access)
+
+    passport = BlastPassport(
+        site_section_id=section.id,
+        created_by_id=user.id,
+        explosive_type="ANFO",
+        total_explosive_kg=500.0,
+        status=PassportStatus.APPROVED,
+    )
+    db_session.add(passport)
+    await db_session.flush()
+
+    return {
+        "sub": sub,
+        "user": user,
+        "quarry": quarry,
+        "section": section,
+        "role": role,
+        "passport": passport,
+    }
+
+
+@pytest_asyncio.fixture
+async def surveyor_user(db_session: AsyncSession, blaster_user):
+    """Surveyor-level user on the same quarry."""
+    sub = f"surveyor-{uuid.uuid4()}"
+    role = Role(name=f"surveyor-{uuid.uuid4()}", level=2)
+    db_session.add(role)
+    await db_session.flush()
+
+    user = UserProfile(
+        keycloak_sub=sub, email=f"{sub}@test.local", full_name="Surveyor User"
+    )
+    db_session.add(user)
+    await db_session.flush()
+
+    access = QuarryUserAccess(
+        user_id=user.id, quarry_id=blaster_user["quarry"].id, role_id=role.id
+    )
+    db_session.add(access)
+    await db_session.flush()
+
+    return {"sub": sub, "user": user, **blaster_user}
+
+
+@pytest_asyncio.fixture
+async def device_and_calibration(db_session: AsyncSession, blaster_user):
+    """A registered Device + active Calibration."""
+    device = Device(serial_number=f"SN-{uuid.uuid4()}", model="ZED 2")
+    db_session.add(device)
+    await db_session.flush()
+
+    cal = Calibration(
+        device_id=device.id,
+        calibrated_by_id=blaster_user["user"].id,
+        left_camera_matrix={"fx": 700.0, "fy": 700.0, "cx": 640.0, "cy": 360.0},
+        right_camera_matrix={"fx": 700.0, "fy": 700.0, "cx": 640.0, "cy": 360.0},
+        left_dist_coeffs={"k1": 0.0, "k2": 0.0, "p1": 0.0, "p2": 0.0, "k3": 0.0},
+        right_dist_coeffs={"k1": 0.0, "k2": 0.0, "p1": 0.0, "p2": 0.0, "k3": 0.0},
+        rotation_matrix={"data": [[1, 0, 0], [0, 1, 0], [0, 0, 1]]},
+        translation_vector={"data": [0.12, 0.0, 0.0]},
+        baseline_mm=120.0,
+        image_width_px=1280,
+        image_height_px=720,
+    )
+    db_session.add(cal)
+    await db_session.flush()
+
+    return {"device": device, "calibration": cal}
+
+
+@pytest_asyncio.fixture
+async def blast_event(db_session: AsyncSession, blaster_user):
+    """BlastEvent linked to the blaster_user fixture's passport."""
+    event = BlastEvent(
+        passport_id=blaster_user["passport"].id,
+        executed_by_id=blaster_user["user"].id,
+        blast_datetime=datetime.now(tz=timezone.utc),
+        actual_explosive_kg=480.0,
+    )
+    db_session.add(event)
+    await db_session.flush()
+    return event
+
+
+@pytest_asyncio.fixture
+async def capture_session(db_session: AsyncSession, blaster_user, blast_event, device_and_calibration):
+    """CaptureSession linked to the blast_event fixture."""
+    session = CaptureSession(
+        blast_event_id=blast_event.id,
+        device_id=device_and_calibration["device"].id,
+        calibration_id=device_and_calibration["calibration"].id,
+        captured_by_id=blaster_user["user"].id,
+        capture_datetime=datetime.now(tz=timezone.utc),
+    )
+    db_session.add(session)
+    await db_session.flush()
+    return session
+
+
+# ── Device tests ──────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_register_device(db_session: AsyncSession, blaster_user):
+    async with _client(db_session, _jwt(blaster_user["sub"])) as ac:
+        resp = await ac.post(
+            "/api/v1/devices",
+            json={"serial_number": f"SN-{uuid.uuid4()}", "model": "ZED 2"},
+            headers={"Authorization": "Bearer fake"},
+        )
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["model"] == "ZED 2"
+    assert "id" in data
+
+
+@pytest.mark.asyncio
+async def test_list_devices(db_session: AsyncSession, blaster_user, device_and_calibration):
+    async with _client(db_session, _jwt(blaster_user["sub"])) as ac:
+        resp = await ac.get("/api/v1/devices", headers={"Authorization": "Bearer fake"})
+    assert resp.status_code == 200
+    data = resp.json()
+    ids = [d["id"] for d in data["items"]]
+    assert str(device_and_calibration["device"].id) in ids
+
+
+@pytest.mark.asyncio
+async def test_add_calibration(db_session: AsyncSession, blaster_user, device_and_calibration):
+    device = device_and_calibration["device"]
+    payload = {
+        "left_camera_matrix": {"fx": 700.0, "fy": 700.0, "cx": 640.0, "cy": 360.0},
+        "right_camera_matrix": {"fx": 700.0, "fy": 700.0, "cx": 640.0, "cy": 360.0},
+        "left_dist_coeffs": {"k1": 0.0, "k2": 0.0, "p1": 0.0, "p2": 0.0, "k3": 0.0},
+        "right_dist_coeffs": {"k1": 0.0, "k2": 0.0, "p1": 0.0, "p2": 0.0, "k3": 0.0},
+        "rotation_matrix": {"data": [[1, 0, 0], [0, 1, 0], [0, 0, 1]]},
+        "translation_vector": {"data": [0.12, 0.0, 0.0]},
+        "baseline_mm": 120.0,
+        "image_width_px": 1280,
+        "image_height_px": 720,
+    }
+    async with _client(db_session, _jwt(blaster_user["sub"])) as ac:
+        resp = await ac.post(
+            f"/api/v1/devices/{device.id}/calibrations",
+            json=payload,
+            headers={"Authorization": "Bearer fake"},
+        )
+    assert resp.status_code == 201
+    assert resp.json()["device_id"] == str(device.id)
+
+
+# ── BlastEvent tests ──────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_create_blast_event(db_session: AsyncSession, blaster_user):
+    q_id = blaster_user["quarry"].id
+    p_id = blaster_user["passport"].id
+    payload = {
+        "blast_datetime": datetime.now(tz=timezone.utc).isoformat(),
+        "actual_explosive_kg": 490.0,
+        "notes": "Test blast",
+    }
+    async with _client(db_session, _jwt(blaster_user["sub"])) as ac:
+        resp = await ac.post(
+            f"/api/v1/quarries/{q_id}/passports/{p_id}/blast-event",
+            json=payload,
+            headers={"Authorization": "Bearer fake"},
+        )
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["passport_id"] == str(p_id)
+    assert data["notes"] == "Test blast"
+
+
+@pytest.mark.asyncio
+async def test_create_blast_event_draft_passport_rejected(
+    db_session: AsyncSession, blaster_user
+):
+    """A blast event cannot be created for a DRAFT passport."""
+    draft_passport = BlastPassport(
+        site_section_id=blaster_user["section"].id,
+        created_by_id=blaster_user["user"].id,
+        explosive_type="ANFO",
+        total_explosive_kg=100.0,
+        status=PassportStatus.DRAFT,
+    )
+    db_session.add(draft_passport)
+    await db_session.flush()
+
+    q_id = blaster_user["quarry"].id
+    async with _client(db_session, _jwt(blaster_user["sub"])) as ac:
+        resp = await ac.post(
+            f"/api/v1/quarries/{q_id}/passports/{draft_passport.id}/blast-event",
+            json={"blast_datetime": datetime.now(tz=timezone.utc).isoformat()},
+            headers={"Authorization": "Bearer fake"},
+        )
+    assert resp.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_create_blast_event_duplicate_rejected(
+    db_session: AsyncSession, blaster_user, blast_event
+):
+    """Second blast event for the same passport → 409."""
+    q_id = blaster_user["quarry"].id
+    p_id = blaster_user["passport"].id
+    async with _client(db_session, _jwt(blaster_user["sub"])) as ac:
+        resp = await ac.post(
+            f"/api/v1/quarries/{q_id}/passports/{p_id}/blast-event",
+            json={"blast_datetime": datetime.now(tz=timezone.utc).isoformat()},
+            headers={"Authorization": "Bearer fake"},
+        )
+    assert resp.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_get_blast_event(db_session: AsyncSession, blaster_user, blast_event):
+    q_id = blaster_user["quarry"].id
+    p_id = blaster_user["passport"].id
+    async with _client(db_session, _jwt(blaster_user["sub"])) as ac:
+        resp = await ac.get(
+            f"/api/v1/quarries/{q_id}/passports/{p_id}/blast-event",
+            headers={"Authorization": "Bearer fake"},
+        )
+    assert resp.status_code == 200
+    assert resp.json()["id"] == str(blast_event.id)
+
+
+# ── CaptureSession tests ──────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_create_capture_session(
+    db_session: AsyncSession, surveyor_user, blast_event, device_and_calibration
+):
+    q_id = surveyor_user["quarry"].id
+    p_id = surveyor_user["passport"].id
+    payload = {
+        "device_id": str(device_and_calibration["device"].id),
+        "calibration_id": str(device_and_calibration["calibration"].id),
+        "capture_datetime": datetime.now(tz=timezone.utc).isoformat(),
+        "notes": "Morning capture",
+    }
+    async with _client(db_session, _jwt(surveyor_user["sub"])) as ac:
+        resp = await ac.post(
+            f"/api/v1/quarries/{q_id}/passports/{p_id}/blast-event/capture-sessions",
+            json=payload,
+            headers={"Authorization": "Bearer fake"},
+        )
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["blast_event_id"] == str(blast_event.id)
+    assert data["frame_count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_list_capture_sessions(
+    db_session: AsyncSession, blaster_user, blast_event, capture_session
+):
+    q_id = blaster_user["quarry"].id
+    p_id = blaster_user["passport"].id
+    async with _client(db_session, _jwt(blaster_user["sub"])) as ac:
+        resp = await ac.get(
+            f"/api/v1/quarries/{q_id}/passports/{p_id}/blast-event/capture-sessions",
+            headers={"Authorization": "Bearer fake"},
+        )
+    assert resp.status_code == 200
+    data = resp.json()
+    ids = [s["id"] for s in data["items"]]
+    assert str(capture_session.id) in ids
+
+
+# ── Artifact upload tests ─────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_upload_artifact(db_session: AsyncSession, blaster_user, capture_session):
+    mock_storage = MagicMock()
+    mock_storage.upload_file.return_value = "some/key"
+
+    with patch("app.routers.capture_sessions.get_storage_service", return_value=mock_storage):
+        async with _client(db_session, _jwt(blaster_user["sub"])) as ac:
+            resp = await ac.post(
+                f"/api/v1/capture-sessions/{capture_session.id}/artifacts",
+                data={"artifact_type": "left_frame", "frame_index": "0"},
+                files={"file": ("frame_0.jpg", io.BytesIO(b"fake-jpeg-data"), "image/jpeg")},
+                headers={"Authorization": "Bearer fake"},
+            )
+
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["artifact_type"] == "left_frame"
+    assert data["file_size_bytes"] == len(b"fake-jpeg-data")
+    assert data["frame_index"] == 0
+    assert data["content_type"] == "image/jpeg"
+    mock_storage.upload_file.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_upload_artifact_wrong_content_type_rejected(
+    db_session: AsyncSession, blaster_user, capture_session
+):
+    """Uploading a PDF as a left_frame → 415."""
+    mock_storage = MagicMock()
+
+    with patch("app.routers.capture_sessions.get_storage_service", return_value=mock_storage):
+        async with _client(db_session, _jwt(blaster_user["sub"])) as ac:
+            resp = await ac.post(
+                f"/api/v1/capture-sessions/{capture_session.id}/artifacts",
+                data={"artifact_type": "left_frame"},
+                files={"file": ("doc.pdf", io.BytesIO(b"%PDF-1.4"), "application/pdf")},
+                headers={"Authorization": "Bearer fake"},
+            )
+
+    assert resp.status_code == 415
+
+
+@pytest.mark.asyncio
+async def test_list_artifacts(db_session: AsyncSession, blaster_user, capture_session):
+    from app.db.models.artifact import Artifact, ArtifactType
+
+    artifact = Artifact(
+        capture_session_id=capture_session.id,
+        artifact_type=ArtifactType.LEFT_FRAME,
+        storage_bucket="zmetrics-frames",
+        storage_key=f"sessions/{capture_session.id}/left_frame/test.jpg",
+        file_size_bytes=1024,
+        content_type="image/jpeg",
+    )
+    db_session.add(artifact)
+    await db_session.flush()
+
+    async with _client(db_session, _jwt(blaster_user["sub"])) as ac:
+        resp = await ac.get(
+            f"/api/v1/capture-sessions/{capture_session.id}/artifacts",
+            headers={"Authorization": "Bearer fake"},
+        )
+    assert resp.status_code == 200
+    assert len(resp.json()["items"]) >= 1
+
+
+@pytest.mark.asyncio
+async def test_get_artifact_url(db_session: AsyncSession, blaster_user, capture_session):
+    from app.db.models.artifact import Artifact, ArtifactType
+
+    artifact = Artifact(
+        capture_session_id=capture_session.id,
+        artifact_type=ArtifactType.LEFT_FRAME,
+        storage_bucket="zmetrics-frames",
+        storage_key="sessions/test/left_frame/x.jpg",
+        file_size_bytes=512,
+        content_type="image/jpeg",
+    )
+    db_session.add(artifact)
+    await db_session.flush()
+
+    mock_storage = MagicMock()
+    mock_storage.get_presigned_url.return_value = "https://minio.test/presigned"
+
+    with patch("app.routers.capture_sessions.get_storage_service", return_value=mock_storage):
+        async with _client(db_session, _jwt(blaster_user["sub"])) as ac:
+            resp = await ac.get(
+                f"/api/v1/capture-sessions/{capture_session.id}/artifacts/{artifact.id}/url",
+                headers={"Authorization": "Bearer fake"},
+            )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["url"] == "https://minio.test/presigned"
+    assert data["expires_in"] == 3600

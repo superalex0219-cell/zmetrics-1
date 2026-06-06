@@ -26,7 +26,10 @@ class Settings(BaseSettings):
     minio_bucket_artifacts: str = "zmetrics-artifacts"
 
     # Keycloak OIDC
-    keycloak_url: str = "http://localhost:8080"
+    # kc_internal_url: backchannel URL the backend uses to fetch JWKS (docker-internal)
+    # kc_public_url: frontend-facing URL embedded in token iss claims (host-reachable)
+    kc_internal_url: str = "http://localhost:8080"
+    kc_public_url: str = "http://localhost:8080"
     kc_realm: str = "zmetrics"
     kc_client_id: str = "zmetrics-backend"
 
@@ -36,12 +39,12 @@ class Settings(BaseSettings):
     @computed_field
     @property
     def jwks_url(self) -> str:
-        return f"{self.keycloak_url}/realms/{self.kc_realm}/protocol/openid-connect/certs"
+        return f"{self.kc_internal_url}/realms/{self.kc_realm}/protocol/openid-connect/certs"
 
     @computed_field
     @property
     def token_issuer(self) -> str:
-        return f"{self.keycloak_url}/realms/{self.kc_realm}"
+        return f"{self.kc_public_url}/realms/{self.kc_realm}"
 
 
 @lru_cache
