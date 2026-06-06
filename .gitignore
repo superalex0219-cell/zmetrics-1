@@ -74,6 +74,9 @@ artifacts/
 .DS_Store
 Thumbs.db
 
+# Reference UI prototype (not part of the monorepo)
+ZMetrics-test-webi-nterface/
+
 # Logs
 *.log
 *.pid
