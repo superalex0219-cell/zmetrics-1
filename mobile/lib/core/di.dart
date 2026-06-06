@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../features/capture/data/capture_repository.dart';
+import '../features/capture/data/device_repository.dart';
 import '../features/passport/data/passport_repository.dart';
 import '../features/quarries/data/quarry_repository.dart';
 import '../features/report/data/report_repository.dart';
@@ -19,10 +20,6 @@ import 'network/token_provider.dart';
 /// Composition root. Wires either mock stubs (config.useMockServices) or the
 /// live backend-backed implementations. Constructed once in main() and exposed
 /// to the widget tree via RepositoryProvider.
-///
-/// NOTE: the Capture feature stays on the mock stub even in backend mode — the
-/// real capture-session flow needs a blast-event + device + calibration chain
-/// that has no client UI yet (see docs/handoffs/TASK-backend-mobile-integration.md §6).
 class AppDependencies {
   AppDependencies._({
     required this.config,
@@ -32,6 +29,7 @@ class AppDependencies {
     required this.passportRepository,
     required this.reportRepository,
     required this.captureRepository,
+    required this.deviceRepository,
     required this.syncProcessor,
     required this.devSeedService,
     required this.authEventBus,
@@ -46,6 +44,7 @@ class AppDependencies {
   final PassportRepository passportRepository;
   final ReportRepository reportRepository;
   final CaptureRepository captureRepository;
+  final DeviceRepository deviceRepository;
   final SyncProcessor syncProcessor;
   final DevSeedService devSeedService;
 
@@ -60,13 +59,11 @@ class AppDependencies {
     final SyncManager syncManager =
         kIsWeb ? InMemorySyncManager() : SqfliteSyncManager();
 
-    // Capture is always the mock stub for now (see class note).
-    final capture = MockCaptureRepository(syncManager);
-    final processor = SyncProcessor(syncManager, {
-      kOpCreateCaptureSession: (_) async {},
-    });
-
     if (config.useMockServices) {
+      final capture = MockCaptureRepository(syncManager);
+      final processor = SyncProcessor(syncManager, {
+        kOpCreateCaptureSession: (_) async {},
+      });
       return AppDependencies._(
         config: config,
         authRepository: MockAuthRepository(),
@@ -75,6 +72,7 @@ class AppDependencies {
         passportRepository: MockPassportRepository(),
         reportRepository: MockReportRepository(),
         captureRepository: capture,
+        deviceRepository: MockDeviceRepository(),
         syncProcessor: processor,
         devSeedService: MockDevSeedService(),
         authEventBus: authEventBus,
@@ -92,6 +90,14 @@ class AppDependencies {
       tokens,
       onAuthFailure: authEventBus.notifySessionExpired,
     ).dio;
+
+    final remoteCapture = RemoteCaptureRepository(dio, syncManager);
+    final processor = SyncProcessor(syncManager, {
+      kOpCreateCaptureSession: (upload) =>
+          remoteCapture.postQueuedCaptureSession(
+              upload.idempotencyKey, upload.payload),
+    });
+
     return AppDependencies._(
       config: config,
       authRepository: auth,
@@ -99,7 +105,8 @@ class AppDependencies {
       quarryRepository: RemoteQuarryRepository(dio),
       passportRepository: RemotePassportRepository(dio),
       reportRepository: RemoteReportRepository(dio),
-      captureRepository: capture,
+      captureRepository: remoteCapture,
+      deviceRepository: RemoteDeviceRepository(dio),
       syncProcessor: processor,
       devSeedService: RemoteDevSeedService(dio),
       authEventBus: authEventBus,

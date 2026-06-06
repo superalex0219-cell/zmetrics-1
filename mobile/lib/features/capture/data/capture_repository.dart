@@ -18,7 +18,7 @@ const String kOpCreateCaptureSession = 'create_capture_session';
 /// the SyncProcessor when connectivity returns.
 abstract class CaptureRepository {
   Future<CaptureSession> createCaptureSession(NewCaptureSession draft);
-  Future<List<CaptureSession>> listSessions(String blastEventId);
+  Future<List<CaptureSession>> listSessions(String quarryId, String passportId);
   Future<AnalysisJob> triggerAnalysis(String captureSessionId);
   Future<List<AnalysisJob>> listJobs(String captureSessionId);
   Future<AnalysisJob> getJob(String captureSessionId, String jobId);
@@ -44,7 +44,7 @@ class MockCaptureRepository implements CaptureRepository {
       payload: draft.toJson(),
     );
     final session = CaptureSession(
-      id: idempotencyKey, // mock: reuse key as local id
+      id: idempotencyKey,
       blastEventId: draft.blastEventId,
       deviceId: draft.deviceId,
       calibrationId: draft.calibrationId,
@@ -57,8 +57,9 @@ class MockCaptureRepository implements CaptureRepository {
   }
 
   @override
-  Future<List<CaptureSession>> listSessions(String blastEventId) async =>
-      _sessions.where((s) => s.blastEventId == blastEventId).toList();
+  Future<List<CaptureSession>> listSessions(
+          String quarryId, String passportId) async =>
+      List.unmodifiable(_sessions);
 
   @override
   Future<AnalysisJob> triggerAnalysis(String captureSessionId) async {
@@ -84,7 +85,7 @@ class MockCaptureRepository implements CaptureRepository {
   }
 }
 
-/// Live implementation. `createCaptureSession` still enqueues (offline-first);
+/// Live implementation. [createCaptureSession] still enqueues (offline-first);
 /// the SyncProcessor performs the actual POST via [postQueuedCaptureSession].
 class RemoteCaptureRepository implements CaptureRepository {
   RemoteCaptureRepository(this._dio, this._sync);
@@ -117,10 +118,16 @@ class RemoteCaptureRepository implements CaptureRepository {
     String idempotencyKey,
     Map<String, dynamic> payload,
   ) async {
+    final quarryId = payload['quarry_id'] as String;
+    final passportId = payload['passport_id'] as String;
     try {
       await _dio.post(
-        '/api/v1/capture-sessions',
-        data: payload,
+        '/api/v1/quarries/$quarryId/passports/$passportId/blast-event/capture-sessions',
+        data: {
+          'device_id': payload['device_id'],
+          'calibration_id': payload['calibration_id'],
+          'capture_datetime': payload['capture_datetime'],
+        },
         options: Options(headers: {'Idempotency-Key': idempotencyKey}),
       );
     } on DioException catch (e) {
@@ -129,9 +136,12 @@ class RemoteCaptureRepository implements CaptureRepository {
   }
 
   @override
-  Future<List<CaptureSession>> listSessions(String blastEventId) async {
+  Future<List<CaptureSession>> listSessions(
+      String quarryId, String passportId) async {
     try {
-      final res = await _dio.get('/api/v1/blast-events/$blastEventId/captures');
+      final res = await _dio.get(
+        '/api/v1/quarries/$quarryId/passports/$passportId/blast-event/capture-sessions',
+      );
       return Paginated<CaptureSession>.fromJson(
         res.data as Map<String, dynamic>,
         CaptureSession.fromJson,

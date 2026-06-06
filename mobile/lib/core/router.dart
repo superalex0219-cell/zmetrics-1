@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/capture/application/capture_cubit.dart';
 import '../features/capture/data/capture_repository.dart';
+import '../features/capture/data/device_repository.dart';
 import '../features/capture/presentation/capture_screen.dart';
 import '../features/passport/application/passport_detail_cubit.dart';
 import '../features/passport/application/passport_list_cubit.dart';
@@ -125,13 +126,18 @@ GoRouter buildRouter(AuthCubit authCubit) {
         },
       ),
       GoRoute(
-        path: '/blast-events/:eid/captures',
+        path: '/quarries/:qid/passports/:pid/captures',
         builder: (context, state) {
-          final eid = state.pathParameters['eid']!;
+          final qid = state.pathParameters['qid']!;
+          final pid = state.pathParameters['pid']!;
           return BlocProvider(
-            create: (ctx) =>
-                CaptureCubit(ctx.read<CaptureRepository>(), eid)..load(),
-            child: const CaptureScreen(),
+            create: (ctx) => CaptureCubit(
+              ctx.read<CaptureRepository>(),
+              ctx.read<DeviceRepository>(),
+              qid,
+              pid,
+            )..load(),
+            child: CaptureScreen(quarryId: qid),
           );
         },
       ),

@@ -33,8 +33,11 @@ _$NewCaptureSessionImpl _$$NewCaptureSessionImplFromJson(
         Map<String, dynamic> json) =>
     _$NewCaptureSessionImpl(
       blastEventId: json['blast_event_id'] as String,
-      deviceId: json['device_id'] as String?,
-      calibrationId: json['calibration_id'] as String?,
+      quarryId: json['quarry_id'] as String,
+      passportId: json['passport_id'] as String,
+      deviceId: json['device_id'] as String,
+      calibrationId: json['calibration_id'] as String,
+      captureDateTime: json['capture_datetime'] as String,
       frameCount: (json['frame_count'] as num?)?.toInt() ?? 0,
     );
 
@@ -42,7 +45,10 @@ Map<String, dynamic> _$$NewCaptureSessionImplToJson(
         _$NewCaptureSessionImpl instance) =>
     <String, dynamic>{
       'blast_event_id': instance.blastEventId,
+      'quarry_id': instance.quarryId,
+      'passport_id': instance.passportId,
       'device_id': instance.deviceId,
       'calibration_id': instance.calibrationId,
+      'capture_datetime': instance.captureDateTime,
       'frame_count': instance.frameCount,
     };

@@ -331,10 +331,16 @@ NewCaptureSession _$NewCaptureSessionFromJson(Map<String, dynamic> json) {
 mixin _$NewCaptureSession {
   @JsonKey(name: 'blast_event_id')
   String get blastEventId => throw _privateConstructorUsedError;
+  @JsonKey(name: 'quarry_id')
+  String get quarryId => throw _privateConstructorUsedError;
+  @JsonKey(name: 'passport_id')
+  String get passportId => throw _privateConstructorUsedError;
   @JsonKey(name: 'device_id')
-  String? get deviceId => throw _privateConstructorUsedError;
+  String get deviceId => throw _privateConstructorUsedError;
   @JsonKey(name: 'calibration_id')
-  String? get calibrationId => throw _privateConstructorUsedError;
+  String get calibrationId => throw _privateConstructorUsedError;
+  @JsonKey(name: 'capture_datetime')
+  String get captureDateTime => throw _privateConstructorUsedError;
   @JsonKey(name: 'frame_count')
   int get frameCount => throw _privateConstructorUsedError;
 
@@ -356,8 +362,11 @@ abstract class $NewCaptureSessionCopyWith<$Res> {
   @useResult
   $Res call(
       {@JsonKey(name: 'blast_event_id') String blastEventId,
-      @JsonKey(name: 'device_id') String? deviceId,
-      @JsonKey(name: 'calibration_id') String? calibrationId,
+      @JsonKey(name: 'quarry_id') String quarryId,
+      @JsonKey(name: 'passport_id') String passportId,
+      @JsonKey(name: 'device_id') String deviceId,
+      @JsonKey(name: 'calibration_id') String calibrationId,
+      @JsonKey(name: 'capture_datetime') String captureDateTime,
       @JsonKey(name: 'frame_count') int frameCount});
 }
 
@@ -377,8 +386,11 @@ class _$NewCaptureSessionCopyWithImpl<$Res, $Val extends NewCaptureSession>
   @override
   $Res call({
     Object? blastEventId = null,
-    Object? deviceId = freezed,
-    Object? calibrationId = freezed,
+    Object? quarryId = null,
+    Object? passportId = null,
+    Object? deviceId = null,
+    Object? calibrationId = null,
+    Object? captureDateTime = null,
     Object? frameCount = null,
   }) {
     return _then(_value.copyWith(
@@ -386,14 +398,26 @@ class _$NewCaptureSessionCopyWithImpl<$Res, $Val extends NewCaptureSession>
           ? _value.blastEventId
           : blastEventId // ignore: cast_nullable_to_non_nullable
               as String,
-      deviceId: freezed == deviceId
+      quarryId: null == quarryId
+          ? _value.quarryId
+          : quarryId // ignore: cast_nullable_to_non_nullable
+              as String,
+      passportId: null == passportId
+          ? _value.passportId
+          : passportId // ignore: cast_nullable_to_non_nullable
+              as String,
+      deviceId: null == deviceId
           ? _value.deviceId
           : deviceId // ignore: cast_nullable_to_non_nullable
-              as String?,
-      calibrationId: freezed == calibrationId
+              as String,
+      calibrationId: null == calibrationId
           ? _value.calibrationId
           : calibrationId // ignore: cast_nullable_to_non_nullable
-              as String?,
+              as String,
+      captureDateTime: null == captureDateTime
+          ? _value.captureDateTime
+          : captureDateTime // ignore: cast_nullable_to_non_nullable
+              as String,
       frameCount: null == frameCount
           ? _value.frameCount
           : frameCount // ignore: cast_nullable_to_non_nullable
@@ -412,8 +436,11 @@ abstract class _$$NewCaptureSessionImplCopyWith<$Res>
   @useResult
   $Res call(
       {@JsonKey(name: 'blast_event_id') String blastEventId,
-      @JsonKey(name: 'device_id') String? deviceId,
-      @JsonKey(name: 'calibration_id') String? calibrationId,
+      @JsonKey(name: 'quarry_id') String quarryId,
+      @JsonKey(name: 'passport_id') String passportId,
+      @JsonKey(name: 'device_id') String deviceId,
+      @JsonKey(name: 'calibration_id') String calibrationId,
+      @JsonKey(name: 'capture_datetime') String captureDateTime,
       @JsonKey(name: 'frame_count') int frameCount});
 }
 
@@ -431,8 +458,11 @@ class __$$NewCaptureSessionImplCopyWithImpl<$Res>
   @override
   $Res call({
     Object? blastEventId = null,
-    Object? deviceId = freezed,
-    Object? calibrationId = freezed,
+    Object? quarryId = null,
+    Object? passportId = null,
+    Object? deviceId = null,
+    Object? calibrationId = null,
+    Object? captureDateTime = null,
     Object? frameCount = null,
   }) {
     return _then(_$NewCaptureSessionImpl(
@@ -440,14 +470,26 @@ class __$$NewCaptureSessionImplCopyWithImpl<$Res>
           ? _value.blastEventId
           : blastEventId // ignore: cast_nullable_to_non_nullable
               as String,
-      deviceId: freezed == deviceId
+      quarryId: null == quarryId
+          ? _value.quarryId
+          : quarryId // ignore: cast_nullable_to_non_nullable
+              as String,
+      passportId: null == passportId
+          ? _value.passportId
+          : passportId // ignore: cast_nullable_to_non_nullable
+              as String,
+      deviceId: null == deviceId
           ? _value.deviceId
           : deviceId // ignore: cast_nullable_to_non_nullable
-              as String?,
-      calibrationId: freezed == calibrationId
+              as String,
+      calibrationId: null == calibrationId
           ? _value.calibrationId
           : calibrationId // ignore: cast_nullable_to_non_nullable
-              as String?,
+              as String,
+      captureDateTime: null == captureDateTime
+          ? _value.captureDateTime
+          : captureDateTime // ignore: cast_nullable_to_non_nullable
+              as String,
       frameCount: null == frameCount
           ? _value.frameCount
           : frameCount // ignore: cast_nullable_to_non_nullable
@@ -461,8 +503,11 @@ class __$$NewCaptureSessionImplCopyWithImpl<$Res>
 class _$NewCaptureSessionImpl implements _NewCaptureSession {
   const _$NewCaptureSessionImpl(
       {@JsonKey(name: 'blast_event_id') required this.blastEventId,
-      @JsonKey(name: 'device_id') this.deviceId,
-      @JsonKey(name: 'calibration_id') this.calibrationId,
+      @JsonKey(name: 'quarry_id') required this.quarryId,
+      @JsonKey(name: 'passport_id') required this.passportId,
+      @JsonKey(name: 'device_id') required this.deviceId,
+      @JsonKey(name: 'calibration_id') required this.calibrationId,
+      @JsonKey(name: 'capture_datetime') required this.captureDateTime,
       @JsonKey(name: 'frame_count') this.frameCount = 0});
 
   factory _$NewCaptureSessionImpl.fromJson(Map<String, dynamic> json) =>
@@ -472,18 +517,27 @@ class _$NewCaptureSessionImpl implements _NewCaptureSession {
   @JsonKey(name: 'blast_event_id')
   final String blastEventId;
   @override
+  @JsonKey(name: 'quarry_id')
+  final String quarryId;
+  @override
+  @JsonKey(name: 'passport_id')
+  final String passportId;
+  @override
   @JsonKey(name: 'device_id')
-  final String? deviceId;
+  final String deviceId;
   @override
   @JsonKey(name: 'calibration_id')
-  final String? calibrationId;
+  final String calibrationId;
+  @override
+  @JsonKey(name: 'capture_datetime')
+  final String captureDateTime;
   @override
   @JsonKey(name: 'frame_count')
   final int frameCount;
 
   @override
   String toString() {
-    return 'NewCaptureSession(blastEventId: $blastEventId, deviceId: $deviceId, calibrationId: $calibrationId, frameCount: $frameCount)';
+    return 'NewCaptureSession(blastEventId: $blastEventId, quarryId: $quarryId, passportId: $passportId, deviceId: $deviceId, calibrationId: $calibrationId, captureDateTime: $captureDateTime, frameCount: $frameCount)';
   }
 
   @override
@@ -493,18 +547,24 @@ class _$NewCaptureSessionImpl implements _NewCaptureSession {
             other is _$NewCaptureSessionImpl &&
             (identical(other.blastEventId, blastEventId) ||
                 other.blastEventId == blastEventId) &&
+            (identical(other.quarryId, quarryId) ||
+                other.quarryId == quarryId) &&
+            (identical(other.passportId, passportId) ||
+                other.passportId == passportId) &&
             (identical(other.deviceId, deviceId) ||
                 other.deviceId == deviceId) &&
             (identical(other.calibrationId, calibrationId) ||
                 other.calibrationId == calibrationId) &&
+            (identical(other.captureDateTime, captureDateTime) ||
+                other.captureDateTime == captureDateTime) &&
             (identical(other.frameCount, frameCount) ||
                 other.frameCount == frameCount));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode => Object.hash(
-      runtimeType, blastEventId, deviceId, calibrationId, frameCount);
+  int get hashCode => Object.hash(runtimeType, blastEventId, quarryId,
+      passportId, deviceId, calibrationId, captureDateTime, frameCount);
 
   /// Create a copy of NewCaptureSession
   /// with the given fields replaced by the non-null parameter values.
@@ -525,11 +585,14 @@ class _$NewCaptureSessionImpl implements _NewCaptureSession {
 
 abstract class _NewCaptureSession implements NewCaptureSession {
   const factory _NewCaptureSession(
-          {@JsonKey(name: 'blast_event_id') required final String blastEventId,
-          @JsonKey(name: 'device_id') final String? deviceId,
-          @JsonKey(name: 'calibration_id') final String? calibrationId,
-          @JsonKey(name: 'frame_count') final int frameCount}) =
-      _$NewCaptureSessionImpl;
+      {@JsonKey(name: 'blast_event_id') required final String blastEventId,
+      @JsonKey(name: 'quarry_id') required final String quarryId,
+      @JsonKey(name: 'passport_id') required final String passportId,
+      @JsonKey(name: 'device_id') required final String deviceId,
+      @JsonKey(name: 'calibration_id') required final String calibrationId,
+      @JsonKey(name: 'capture_datetime') required final String captureDateTime,
+      @JsonKey(name: 'frame_count')
+      final int frameCount}) = _$NewCaptureSessionImpl;
 
   factory _NewCaptureSession.fromJson(Map<String, dynamic> json) =
       _$NewCaptureSessionImpl.fromJson;
@@ -538,11 +601,20 @@ abstract class _NewCaptureSession implements NewCaptureSession {
   @JsonKey(name: 'blast_event_id')
   String get blastEventId;
   @override
+  @JsonKey(name: 'quarry_id')
+  String get quarryId;
+  @override
+  @JsonKey(name: 'passport_id')
+  String get passportId;
+  @override
   @JsonKey(name: 'device_id')
-  String? get deviceId;
+  String get deviceId;
   @override
   @JsonKey(name: 'calibration_id')
-  String? get calibrationId;
+  String get calibrationId;
+  @override
+  @JsonKey(name: 'capture_datetime')
+  String get captureDateTime;
   @override
   @JsonKey(name: 'frame_count')
   int get frameCount;

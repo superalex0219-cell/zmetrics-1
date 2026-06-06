@@ -101,13 +101,22 @@ void main() {
       final sync = InMemorySyncManager();
       final repo = MockCaptureRepository(sync);
       final CaptureSession s = await repo.createCaptureSession(
-        const NewCaptureSession(blastEventId: 'e-1'),
+        const NewCaptureSession(
+          blastEventId: 'e-1',
+          quarryId: 'q-1',
+          passportId: 'p-1',
+          deviceId: 'dev-1',
+          calibrationId: 'cal-1',
+          captureDateTime: '2026-06-06T00:00:00Z',
+        ),
       );
       expect(s.synced, isFalse);
       expect(await sync.pendingCount(), 1);
       final queued = (await sync.getPendingUploads()).single;
       expect(queued.operationType, kOpCreateCaptureSession);
       expect(queued.payload['blast_event_id'], 'e-1');
+      expect(queued.payload['quarry_id'], 'q-1');
+      expect(queued.payload['passport_id'], 'p-1');
     });
   });
 }

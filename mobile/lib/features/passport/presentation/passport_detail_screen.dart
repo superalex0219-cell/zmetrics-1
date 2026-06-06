@@ -91,6 +91,12 @@ class _PassportBody extends StatelessWidget {
                 onPressed: () => _run(context, () => cubit.revise(), 'New revision created'),
               ),
             OutlinedButton.icon(
+              icon: const Icon(Icons.camera_alt_outlined),
+              label: const Text('Captures'),
+              onPressed: () => context.go(
+                  '/quarries/$quarryId/passports/${passport.id}/captures'),
+            ),
+            OutlinedButton.icon(
               icon: const Icon(Icons.analytics_outlined),
               label: const Text('Reports'),
               onPressed: () => context.go('/quarries/$quarryId/reports'),

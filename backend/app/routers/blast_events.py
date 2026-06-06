@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -162,7 +163,11 @@ async def create_capture_session(
     session = CaptureSession(
         blast_event_id=event.id,
         captured_by_id=current_user.id,
-        **body.model_dump(),
+        device_id=body.device_id,
+        calibration_id=body.calibration_id,
+        capture_datetime=body.capture_datetime or datetime.now(tz=timezone.utc),
+        frame_count=0,
+        notes=body.notes,
     )
     db.add(session)
     await db.flush()

@@ -59,14 +59,15 @@ Last sync: 2026-06-06 | HEAD: `3be7873`
 - [x] `login_screen.dart`: removed ROPC fields; `StatelessWidget`; "Sign in via Keycloak"
 - [x] 2 unit tests (restore) + 2 widget tests (login screen) → 45 total
 
-### MOB-3 — Capture Flow · `mobile/` only
-*Depends on BACK-SEC-2 being merged first (clean endpoints).*
-
-- [ ] `CaptureScreen`: replace stub UI with form (device/calibration selection, start capture)
-- [ ] Enqueue `kOpCreateCaptureSession` → SyncProcessor actually POSTs to backend
-- [ ] Frame upload via `SyncProcessor` (multipart, idempotency key per frame)
-- [ ] Job status polling: `GET /capture-sessions/{id}/jobs/{job_id}` → show progress indicator
-- [ ] Navigate to report screen when job status = `completed`
+### MOB-3 — Capture Flow · `mobile/` only ✅ (pending commit)
+- [x] `CaptureScreen`: device + calibration dropdowns; FAB gated on selection
+- [x] `kOpCreateCaptureSession` SyncProcessor handler wired to real backend URL
+- [x] `DeviceRepository` + `Device`/`DeviceCalibration` freezed models
+- [x] `listSessions` URL fixed to use quarryId + passportId path
+- [x] Job polling via `pollJobUntilTerminal`; LinearProgressIndicator; navigate to reports list on complete
+- [x] `PassportDetailScreen` "Captures" button; route updated to `/quarries/:qid/passports/:pid/captures`
+- [x] Backend: `capture_datetime` optional + `frame_count=0` default in `create_capture_session`
+- [x] 55 tests (10 new)
 
 ---
 

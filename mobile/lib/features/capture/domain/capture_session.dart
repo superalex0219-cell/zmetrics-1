@@ -26,13 +26,18 @@ class CaptureSession with _$CaptureSession {
 }
 
 /// Payload to create a capture session. Sent through the offline SyncManager
-/// with a client-generated idempotency key.
+/// with a client-generated idempotency key. Carries quarryId + passportId so
+/// the SyncProcessor can build the correct backend URL without a blast-event
+/// lookup.
 @freezed
 class NewCaptureSession with _$NewCaptureSession {
   const factory NewCaptureSession({
     @JsonKey(name: 'blast_event_id') required String blastEventId,
-    @JsonKey(name: 'device_id') String? deviceId,
-    @JsonKey(name: 'calibration_id') String? calibrationId,
+    @JsonKey(name: 'quarry_id') required String quarryId,
+    @JsonKey(name: 'passport_id') required String passportId,
+    @JsonKey(name: 'device_id') required String deviceId,
+    @JsonKey(name: 'calibration_id') required String calibrationId,
+    @JsonKey(name: 'capture_datetime') required String captureDateTime,
     @JsonKey(name: 'frame_count') @Default(0) int frameCount,
   }) = _NewCaptureSession;
 

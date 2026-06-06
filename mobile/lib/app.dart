@@ -11,6 +11,7 @@ import 'core/di.dart';
 import 'core/dev/dev_seed_service.dart';
 import 'core/router.dart';
 import 'features/capture/data/capture_repository.dart';
+import 'features/capture/data/device_repository.dart';
 import 'features/passport/data/passport_repository.dart';
 import 'features/quarries/data/quarry_repository.dart';
 import 'features/report/data/report_repository.dart';
@@ -77,6 +78,7 @@ class _ZMetricsAppState extends State<ZMetricsApp> {
         RepositoryProvider<PassportRepository>.value(value: deps.passportRepository),
         RepositoryProvider<ReportRepository>.value(value: deps.reportRepository),
         RepositoryProvider<CaptureRepository>.value(value: deps.captureRepository),
+        RepositoryProvider<DeviceRepository>.value(value: deps.deviceRepository),
         RepositoryProvider<DevSeedService>.value(value: deps.devSeedService),
       ],
       child: MultiBlocProvider(

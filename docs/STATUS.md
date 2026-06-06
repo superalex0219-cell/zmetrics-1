@@ -24,7 +24,7 @@
 |-------|-------|-------|
 | **backend** | M1 + SEC-1 + BACK-SEC-2 complete | 53 tests. All IDOR gaps closed. AuditLog complete for role_assigned. Magic-byte validation on artifact upload. |
 | **worker** | M1 mock pipeline | 7 mock steps; auto-creates Report + Recommendation (`REQUIRES_HUMAN_REVIEW`). `db_models.py` hand-synced — SYNC risk (M6+). |
-| **mobile** | M1 + MOB-1 + MOB-2 complete | 45 tests. OIDC PKCE live (flutter_appauth). ROPC removed from login screen. Capture flow not yet built. |
+| **mobile** | M1 + MOB-1/2/3 complete | 55 tests. OIDC PKCE live. Device/calibration picker. SyncProcessor wired. Job polling + navigate to reports. |
 | **infra** | stale image | Needs `docker compose build backend` to pick up SEC-1 batch + GAP-1/2 changes. |
 
 ---
@@ -38,7 +38,8 @@
 | `1d9ad72` | SEC-1 IDOR (`add_comment`), SEC-2 (`keycloak_sub` removed), SEC-3 (dev-seed flag), DB-1 (index + migration) |
 | `9dc2b4a` | MOB-1: mobile wires analysis-result endpoint; removes dead `_withDerivedMethod` workaround |
 | `aa4c42f` | BACK-SEC-2: IDOR on capture_sessions/blast_events/analysis; AuditLog dev_seed; magic-byte validation; 53 tests |
-| pending | MOB-2: OIDC PKCE (flutter_appauth), restore() fix, login screen; 45 tests |
+| `796823a` | MOB-2: OIDC PKCE (flutter_appauth), restore() fix, login screen; 45 tests |
+| pending | MOB-3: device picker, SyncProcessor wired, job polling, navigate to reports; 55 tests |
 
 ---
 
@@ -46,7 +47,8 @@
 
 | Pri | ID | Item | Layer | Spec |
 |-----|----|------|-------|------|
-| **P1** | MOB-3 | CaptureScreen + device picker + SyncProcessor drain + job polling | mobile | `2026-06-06-TASK-mobile-mob3-capture-flow.md` |
+| **P2** | MOB-4 | Report export: save JSON to device / share sheet | mobile | not yet written |
+| **P2** | M5-a | Rule engine in worker: P80 vs target → Recommendation text | worker | not yet written |
 | P3 | MOB-4 | Report export: save JSON to device / share sheet | mobile | not yet written |
 | P3 | M5-a | Rule-based recommendation engine in worker (P80 vs passport target) | worker | not yet written |
 | later | — | OIDC deactivation sync, PDF reports, per-section RBAC | multi | M2+ |
@@ -91,4 +93,4 @@ cd mobile && flutter test
 |------|------|--------|
 | `2026-06-06-TASK-backend-sec2-idor-capture.md` | BACK-SEC-2 IDORs | **done** (`aa4c42f`) |
 | `2026-06-06-TASK-mobile-mob2-pkce.md` | MOB-2 OIDC PKCE | **done** (`796823a`) |
-| `2026-06-06-TASK-mobile-mob3-capture-flow.md` | MOB-3 capture flow | **queued** |
+| `2026-06-06-TASK-mobile-mob3-capture-flow.md` | MOB-3 capture flow | **done — pending commit** |

@@ -81,7 +81,7 @@ class BlastEventRead(BaseModel):
 class CaptureSessionCreate(BaseModel):
     device_id: UUID
     calibration_id: UUID
-    capture_datetime: datetime
+    capture_datetime: datetime | None = None  # defaults to now() server-side if omitted
     notes: str | None = None
 
 
