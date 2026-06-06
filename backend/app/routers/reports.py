@@ -227,9 +227,18 @@ async def add_comment(
     quarry_id = await _quarry_id_for_report(report_id, db)
     await check_quarry_access(db, current_user.id, quarry_id, RoleLevel.USER)
 
+    rec = (await db.execute(
+        select(Recommendation).where(
+            Recommendation.id == rec_id,
+            Recommendation.report_id == report_id,
+        )
+    )).scalar_one_or_none()
+    if rec is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recommendation not found")
+
     from app.db.models.report import Comment
     comment = Comment(
-        recommendation_id=rec_id,
+        recommendation_id=rec.id,
         author_id=current_user.id,
         body=body.body,
     )

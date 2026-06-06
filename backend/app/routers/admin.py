@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.roles import require_any_admin
+from app.config import get_settings
 from app.db.models.audit import AuditLog
 from app.db.models.user import QuarryUserAccess, Role, UserProfile
 from app.db.session import get_db
@@ -154,6 +155,11 @@ async def dev_seed(
 ) -> DevSeedResult:
     """Idempotent: create demo quarry/analysis chain and grant calling user admin access.
     Safe to call multiple times — skips creation if 'Demo Quarry' already exists."""
+    # SECURITY: this endpoint grants the caller admin on a quarry, so it is gated
+    # behind an explicit dev flag. 404 (not 403) keeps it undiscoverable in prod.
+    if not get_settings().enable_dev_seed:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
     from app.db.models.analysis import AnalysisJob, AnalysisResult, JobStatus, ModelVersion
     from app.db.models.blast import BlastEvent, Calibration, Device
     from app.db.models.capture import CaptureSession

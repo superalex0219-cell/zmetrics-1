@@ -8,7 +8,8 @@ class UserProfileRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    keycloak_sub: str
+    # keycloak_sub deliberately NOT exposed (security.md §Output security):
+    # the Keycloak subject is an internal identifier, never returned via the API.
     email: str
     full_name: str
     is_active: bool

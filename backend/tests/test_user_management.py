@@ -69,3 +69,27 @@ async def test_self_deactivation_blocked(db_session: AsyncSession):
         )
 
     assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_user_response_excludes_keycloak_sub(db_session: AsyncSession):
+    """SEC-2 (security.md): keycloak_sub must never be exposed in API responses."""
+    admin = await _admin_user(db_session)
+    target = await make_user(db_session, full_name="Old Name")
+
+    async with client_for(db_session, jwt(admin.keycloak_sub)) as ac:
+        list_resp = await ac.get(
+            "/api/v1/admin/users", headers={"Authorization": "Bearer fake"}
+        )
+        patch_resp = await ac.patch(
+            f"/api/v1/admin/users/{target.id}",
+            json={"full_name": "New Name"},
+            headers={"Authorization": "Bearer fake"},
+        )
+
+    assert list_resp.status_code == 200
+    items = list_resp.json()["items"]
+    assert items, "expected at least one user in the list"
+    assert all("keycloak_sub" not in item for item in items)
+    assert patch_resp.status_code == 200
+    assert "keycloak_sub" not in patch_resp.json()

@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     # CORS
     backend_cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173"]
 
+    # Dev/bootstrap: gates POST /api/v1/admin/dev-seed. MUST stay False outside
+    # local/dev stacks — the seed endpoint grants the caller admin on a quarry.
+    # Set ENABLE_DEV_SEED=true only via compose env (never baked into the image).
+    enable_dev_seed: bool = False
+
     @computed_field
     @property
     def jwks_url(self) -> str:
