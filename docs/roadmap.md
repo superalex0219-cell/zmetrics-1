@@ -1,6 +1,6 @@
 # ZMetrics — Roadmap
 
-Last sync: 2026-06-06 | HEAD: `3be7873`
+Last sync: 2026-06-06 | HEAD: `f734b97`
 
 ---
 
@@ -73,9 +73,10 @@ Last sync: 2026-06-06 | HEAD: `3be7873`
 
 ## BACKLOG (no hardware or deferred)
 
-### MOB-4 — Report export · `mobile/`
-- [ ] Save `/reports/{id}/export` JSON to device Downloads folder
-- [ ] Share sheet integration (Android `ACTION_SEND`)
+### MOB-4 — Report export · `mobile/` ✅ (`f734b97`)
+- [x] GET `/reports/{id}/export` → `Uint8List` (ResponseType.bytes)
+- [x] Write to temp dir as `report_{id}_{yyyyMMdd}.json`
+- [x] Share sheet via `share_plus` (Android `ACTION_SEND`)
 
 ### M5-a — Rule-based recommendations · `worker/`
 *No hardware needed. High value: engine currently writes a static placeholder text.*

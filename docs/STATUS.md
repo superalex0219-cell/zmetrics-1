@@ -1,20 +1,19 @@
 # ZMetrics — STATUS
 
 **Last updated:** 2026-06-06 (curating chat)
-**Git HEAD:** pending commit for BACK-SEC-2 — push pending
+**Git HEAD:** `f734b97` — MOB-4 done
 
 ---
 
 ## TL;DR for the next session
 
-1. **Commit BACK-SEC-2** — `capture_sessions.py`, `blast_events.py`, `analysis.py`, `admin.py`, `test_blast_capture.py`
-2. `git push origin main` — all local commits, none pushed yet.
-3. **Rebuild containers** — image is stale:
+1. `git push origin main` — 17 commits ahead of origin/main, never pushed.
+2. **Rebuild containers** — backend image is stale:
    ```powershell
    docker compose -f infra\docker-compose.yml build backend
    docker compose -f infra\docker-compose.yml up -d --force-recreate backend
    ```
-4. **Next task:** MOB-2 (OIDC PKCE via flutter_appauth) or MOB-3 (CaptureScreen — now unblocked).
+3. **Next task:** M5-a (rule engine in worker — P80 vs passport target → structured Recommendation).
 
 ---
 
@@ -24,7 +23,7 @@
 |-------|-------|-------|
 | **backend** | M1 + SEC-1 + BACK-SEC-2 complete | 53 tests. All IDOR gaps closed. AuditLog complete for role_assigned. Magic-byte validation on artifact upload. |
 | **worker** | M1 mock pipeline | 7 mock steps; auto-creates Report + Recommendation (`REQUIRES_HUMAN_REVIEW`). `db_models.py` hand-synced — SYNC risk (M6+). |
-| **mobile** | M1 + MOB-1/2/3 complete | 55 tests. OIDC PKCE live. Device/calibration picker. SyncProcessor wired. Job polling + navigate to reports. |
+| **mobile** | M1 + MOB-1/2/3/4 complete | 63 tests. OIDC PKCE live. Device/calibration picker. SyncProcessor wired. Job polling + navigate to reports. Report export via share sheet. |
 | **infra** | stale image | Needs `docker compose build backend` to pick up SEC-1 batch + GAP-1/2 changes. |
 
 ---
@@ -39,7 +38,8 @@
 | `9dc2b4a` | MOB-1: mobile wires analysis-result endpoint; removes dead `_withDerivedMethod` workaround |
 | `aa4c42f` | BACK-SEC-2: IDOR on capture_sessions/blast_events/analysis; AuditLog dev_seed; magic-byte validation; 53 tests |
 | `796823a` | MOB-2: OIDC PKCE (flutter_appauth), restore() fix, login screen; 45 tests |
-| pending | MOB-3: device picker, SyncProcessor wired, job polling, navigate to reports; 55 tests |
+| `760dbb5` | MOB-3: device picker, SyncProcessor wired, job polling, navigate to reports; 55 tests |
+| `f734b97` | MOB-4: report export (share_plus + path_provider); 63 tests |
 
 ---
 
@@ -47,10 +47,8 @@
 
 | Pri | ID | Item | Layer | Spec |
 |-----|----|------|-------|------|
-| **P2** | MOB-4 | Report export: save JSON to device / share sheet | mobile | not yet written |
-| **P2** | M5-a | Rule engine in worker: P80 vs target → Recommendation text | worker | not yet written |
-| P3 | MOB-4 | Report export: save JSON to device / share sheet | mobile | not yet written |
-| P3 | M5-a | Rule-based recommendation engine in worker (P80 vs passport target) | worker | not yet written |
+| **P2** | M5-a | Rule engine in worker: P80 vs target → structured Recommendation | worker | not yet written |
+| P3 | M5-b | LLM explanation layer for recommendations (Claude API) | worker | depends M5-a |
 | later | — | OIDC deactivation sync, PDF reports, per-section RBAC | multi | M2+ |
 
 ---
@@ -93,4 +91,5 @@ cd mobile && flutter test
 |------|------|--------|
 | `2026-06-06-TASK-backend-sec2-idor-capture.md` | BACK-SEC-2 IDORs | **done** (`aa4c42f`) |
 | `2026-06-06-TASK-mobile-mob2-pkce.md` | MOB-2 OIDC PKCE | **done** (`796823a`) |
-| `2026-06-06-TASK-mobile-mob3-capture-flow.md` | MOB-3 capture flow | **done — pending commit** |
+| `2026-06-06-TASK-mobile-mob3-capture-flow.md` | MOB-3 capture flow | **done** (`760dbb5`) |
+| `2026-06-06-TASK-mobile-mob4-report-export.md` | MOB-4 report export | **done** (`f734b97`) |
