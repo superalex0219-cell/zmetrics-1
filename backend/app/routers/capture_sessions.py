@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, s
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth.roles import RoleLevel, check_quarry_access
 from app.db.models.artifact import Artifact, ArtifactType
 from app.db.models.capture import CaptureSession
 from app.db.models.user import UserProfile
@@ -17,6 +18,24 @@ from app.schemas.common import PaginatedResponse
 from app.services.storage import get_storage_service
 
 router = APIRouter()
+
+
+async def _quarry_id_for_session(session_id: UUID, db: AsyncSession) -> UUID:
+    from app.db.models.blast import BlastEvent
+    from app.db.models.passport import BlastPassport
+    from app.db.models.quarry import SiteSection
+    result = await db.execute(
+        select(SiteSection.quarry_id)
+        .join(BlastPassport, BlastPassport.site_section_id == SiteSection.id)
+        .join(BlastEvent, BlastEvent.passport_id == BlastPassport.id)
+        .join(CaptureSession, CaptureSession.blast_event_id == BlastEvent.id)
+        .where(CaptureSession.id == session_id)
+    )
+    quarry_id = result.scalar_one_or_none()
+    if quarry_id is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Capture session not found")
+    return quarry_id
+
 
 _FRAMES_BUCKET = "zmetrics-frames"
 _ARTIFACTS_BUCKET = "zmetrics-artifacts"
@@ -33,6 +52,8 @@ async def list_artifacts(
     current_user: UserProfile = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> PaginatedResponse[ArtifactRead]:
+    quarry_id = await _quarry_id_for_session(session_id, db)
+    await check_quarry_access(db, current_user.id, quarry_id, RoleLevel.USER)
     base = select(Artifact).where(Artifact.capture_session_id == session_id)
     total = (await db.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
     items = list((await db.execute(
@@ -54,14 +75,13 @@ async def upload_artifact(
     current_user: UserProfile = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Artifact:
-    session_result = await db.execute(
+    quarry_id = await _quarry_id_for_session(session_id, db)
+    await check_quarry_access(db, current_user.id, quarry_id, RoleLevel.SURVEYOR)
+
+    # Session confirmed to exist by _quarry_id_for_session above
+    session = (await db.execute(
         select(CaptureSession).where(CaptureSession.id == session_id)
-    )
-    session = session_result.scalar_one_or_none()
-    if session is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Capture session not found"
-        )
+    )).scalar_one()
 
     content_type = file.content_type or "application/octet-stream"
     if artifact_type in _FRAME_TYPES and content_type not in _ALLOWED_FRAME_CONTENT_TYPES:
@@ -71,6 +91,13 @@ async def upload_artifact(
         )
 
     content = await file.read()
+
+    if artifact_type in _FRAME_TYPES:
+        if not (content[:3] == b'\xff\xd8\xff' or content[:8] == b'\x89PNG\r\n\x1a\n'):
+            raise HTTPException(
+                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                detail="Frame content does not match JPEG or PNG magic bytes",
+            )
     checksum = hashlib.sha256(content).hexdigest()
 
     bucket = _FRAMES_BUCKET if artifact_type in _FRAME_TYPES else _ARTIFACTS_BUCKET
@@ -108,6 +135,9 @@ async def get_artifact_url(
     current_user: UserProfile = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ArtifactUrlRead:
+    quarry_id = await _quarry_id_for_session(session_id, db)
+    await check_quarry_access(db, current_user.id, quarry_id, RoleLevel.USER)
+
     result = await db.execute(
         select(Artifact).where(
             Artifact.id == artifact_id,

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.roles import RoleLevel, require_quarry_role
+from app.auth.roles import RoleLevel, check_quarry_access, require_quarry_role
 from app.db.models.blast import BlastEvent, Calibration, Device
 from app.db.models.capture import CaptureSession
 from app.db.models.passport import BlastPassport, PassportStatus
@@ -22,6 +22,18 @@ from app.schemas.common import PaginatedResponse
 router = APIRouter()
 
 
+async def _get_passport_in_quarry(passport_id: UUID, quarry_id: UUID, db: AsyncSession) -> BlastPassport:
+    from app.db.models.quarry import SiteSection
+    passport = (await db.execute(
+        select(BlastPassport)
+        .join(SiteSection, SiteSection.id == BlastPassport.site_section_id)
+        .where(BlastPassport.id == passport_id, SiteSection.quarry_id == quarry_id)
+    )).scalar_one_or_none()
+    if passport is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Passport not found")
+    return passport
+
+
 @router.get("/blast-event", response_model=BlastEventRead)
 async def get_blast_event(
     quarry_id: UUID,
@@ -29,6 +41,9 @@ async def get_blast_event(
     current_user: UserProfile = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> BlastEvent:
+    await check_quarry_access(db, current_user.id, quarry_id, RoleLevel.USER)
+    await _get_passport_in_quarry(passport_id, quarry_id, db)
+
     result = await db.execute(
         select(BlastEvent).where(BlastEvent.passport_id == passport_id)
     )
@@ -53,12 +68,7 @@ async def create_blast_event(
     current_user: UserProfile = Depends(require_quarry_role(RoleLevel.BLASTER)),
     db: AsyncSession = Depends(get_db),
 ) -> BlastEvent:
-    passport_result = await db.execute(
-        select(BlastPassport).where(BlastPassport.id == passport_id)
-    )
-    passport = passport_result.scalar_one_or_none()
-    if passport is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Passport not found")
+    passport = await _get_passport_in_quarry(passport_id, quarry_id, db)
     if passport.status not in (PassportStatus.APPROVED, PassportStatus.ACTIVE):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -93,6 +103,9 @@ async def list_capture_sessions(
     current_user: UserProfile = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> PaginatedResponse[CaptureSessionRead]:
+    await check_quarry_access(db, current_user.id, quarry_id, RoleLevel.USER)
+    await _get_passport_in_quarry(passport_id, quarry_id, db)
+
     event_result = await db.execute(
         select(BlastEvent).where(BlastEvent.passport_id == passport_id)
     )
@@ -122,6 +135,8 @@ async def create_capture_session(
     current_user: UserProfile = Depends(require_quarry_role(RoleLevel.SURVEYOR)),
     db: AsyncSession = Depends(get_db),
 ) -> CaptureSession:
+    await _get_passport_in_quarry(passport_id, quarry_id, db)
+
     event_result = await db.execute(
         select(BlastEvent).where(BlastEvent.passport_id == passport_id)
     )

@@ -201,18 +201,34 @@ async def dev_seed(
                     QuarryUserAccess.revoked_at.is_(None),
                 )
             )).scalar_one_or_none()
-            if not access_exists:
+            if access_exists:
+                db.add(AuditLog(
+                    actor_id=current_user.id,
+                    entity_type="quarry_user_access",
+                    entity_id=access_exists.id,
+                    action="role_assigned",
+                    new_value={"role": "admin", "quarry_id": str(existing_quarry.id)},
+                ))
+            else:
                 admin_role = (await db.execute(
                     select(Role).where(Role.name == "admin")
                 )).scalar_one_or_none()
                 if admin_role:
-                    db.add(QuarryUserAccess(
+                    new_access = QuarryUserAccess(
                         user_id=current_user.id,
                         quarry_id=existing_quarry.id,
                         role_id=admin_role.id,
                         granted_by_id=current_user.id,
-                    ))
+                    )
+                    db.add(new_access)
                     await db.flush()
+                    db.add(AuditLog(
+                        actor_id=current_user.id,
+                        entity_type="quarry_user_access",
+                        entity_id=new_access.id,
+                        action="role_assigned",
+                        new_value={"role": "admin", "quarry_id": str(existing_quarry.id)},
+                    ))
 
             passport = (await db.execute(
                 select(BlastPassport).where(BlastPassport.site_section_id == section.id)
@@ -245,11 +261,20 @@ async def dev_seed(
         db.add(admin_role)
         await db.flush()
 
-    db.add(QuarryUserAccess(
+    access = QuarryUserAccess(
         user_id=current_user.id,
         quarry_id=quarry.id,
         role_id=admin_role.id,
         granted_by_id=current_user.id,
+    )
+    db.add(access)
+    await db.flush()
+    db.add(AuditLog(
+        actor_id=current_user.id,
+        entity_type="quarry_user_access",
+        entity_id=access.id,
+        action="role_assigned",
+        new_value={"role": "admin", "quarry_id": str(quarry.id)},
     ))
 
     passport = BlastPassport(

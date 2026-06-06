@@ -41,18 +41,16 @@ Last sync: 2026-06-06 | HEAD: `3be7873`
 - [x] MOB-1: `analysisResultId` mapped, `getAnalysisResult` wired to live backend (`9dc2b4a`)
 - [x] Dead `_withDerivedMethod` heuristic removed (`9dc2b4a`)
 
+### BACK-SEC-2 — Backend IDOR batch #2 (pending commit)
+- [x] `capture_sessions.py`: quarry chain-walk + role checks + JPEG/PNG magic-byte validation
+- [x] `blast_events.py`: `_get_passport_in_quarry` + missing role checks
+- [x] `analysis.py::get_job_result`: session ownership enforced via AnalysisJob join
+- [x] `admin.py::dev_seed`: AuditLog for role_assigned (both seed paths)
+- [x] 53 tests (4 new security tests added)
+
 ---
 
 ## IN PROGRESS / NEXT
-
-### BACK-SEC-2 — Backend IDOR batch #2 · `backend/` only
-Spec: `docs/handoffs/2026-06-06-TASK-backend-sec2-idor-capture.md`
-
-- [ ] `capture_sessions.py`: add quarry chain-walk + `check_quarry_access` to all 3 endpoints; add JPEG/PNG magic-byte validation
-- [ ] `blast_events.py`: validate `passport_id` belongs to `quarry_id` via `_get_passport_in_quarry`; add missing `check_quarry_access` to `get_blast_event` and `list_capture_sessions`
-- [ ] `analysis.py::get_job_result`: join through `AnalysisJob` to enforce `capture_session_id` ownership
-- [ ] `admin.py::dev_seed`: write `AuditLog(action="role_assigned")`
-- [ ] 4 new tests (≥53 total)
 
 ### MOB-2 — OIDC PKCE · `mobile/` only
 *Unblocks production deployment. Currently ROPC (password grant) — will break if Keycloak disables it.*

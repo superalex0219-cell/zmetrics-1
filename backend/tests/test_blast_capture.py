@@ -356,14 +356,14 @@ async def test_upload_artifact(db_session: AsyncSession, blaster_user, capture_s
             resp = await ac.post(
                 f"/api/v1/capture-sessions/{capture_session.id}/artifacts",
                 data={"artifact_type": "left_frame", "frame_index": "0"},
-                files={"file": ("frame_0.jpg", io.BytesIO(b"fake-jpeg-data"), "image/jpeg")},
+                files={"file": ("frame_0.jpg", io.BytesIO(b'\xff\xd8\xff' + b"fake-jpeg-data"), "image/jpeg")},
                 headers={"Authorization": "Bearer fake"},
             )
 
     assert resp.status_code == 201
     data = resp.json()
     assert data["artifact_type"] == "left_frame"
-    assert data["file_size_bytes"] == len(b"fake-jpeg-data")
+    assert data["file_size_bytes"] == len(b'\xff\xd8\xff' + b"fake-jpeg-data")
     assert data["frame_index"] == 0
     assert data["content_type"] == "image/jpeg"
     mock_storage.upload_file.assert_called_once()
@@ -441,3 +441,116 @@ async def test_get_artifact_url(db_session: AsyncSession, blaster_user, capture_
     data = resp.json()
     assert data["url"] == "https://minio.test/presigned"
     assert data["expires_in"] == 3600
+
+
+# ── Security tests ────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_capture_session_upload_no_access(db_session: AsyncSession, capture_session):
+    """User with no quarry access cannot upload an artifact → 403."""
+    no_access_sub = f"no-access-{uuid.uuid4()}"
+    user = UserProfile(
+        keycloak_sub=no_access_sub,
+        email=f"{no_access_sub}@test.local",
+        full_name="No Access User",
+    )
+    db_session.add(user)
+    await db_session.flush()
+
+    mock_storage = MagicMock()
+    with patch("app.routers.capture_sessions.get_storage_service", return_value=mock_storage):
+        async with _client(db_session, _jwt(no_access_sub)) as ac:
+            resp = await ac.post(
+                f"/api/v1/capture-sessions/{capture_session.id}/artifacts",
+                data={"artifact_type": "left_frame"},
+                files={"file": ("frame.jpg", io.BytesIO(b'\xff\xd8\xff' + b"data"), "image/jpeg")},
+                headers={"Authorization": "Bearer fake"},
+            )
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_capture_session_artifact_wrong_quarry(db_session: AsyncSession, capture_session):
+    """Surveyor on quarry A cannot upload to a session in quarry B → 403."""
+    wrong_sub = f"wrong-{uuid.uuid4()}"
+    wrong_quarry = Quarry(name=f"Wrong Quarry {uuid.uuid4()}")
+    db_session.add(wrong_quarry)
+    wrong_role = Role(name=f"surveyor-{uuid.uuid4()}", level=2)
+    db_session.add(wrong_role)
+    await db_session.flush()
+
+    wrong_user = UserProfile(
+        keycloak_sub=wrong_sub, email=f"{wrong_sub}@test.local", full_name="Wrong User"
+    )
+    db_session.add(wrong_user)
+    await db_session.flush()
+
+    db_session.add(QuarryUserAccess(
+        user_id=wrong_user.id, quarry_id=wrong_quarry.id, role_id=wrong_role.id
+    ))
+    await db_session.flush()
+
+    mock_storage = MagicMock()
+    with patch("app.routers.capture_sessions.get_storage_service", return_value=mock_storage):
+        async with _client(db_session, _jwt(wrong_sub)) as ac:
+            resp = await ac.post(
+                f"/api/v1/capture-sessions/{capture_session.id}/artifacts",
+                data={"artifact_type": "left_frame"},
+                files={"file": ("frame.jpg", io.BytesIO(b'\xff\xd8\xff' + b"data"), "image/jpeg")},
+                headers={"Authorization": "Bearer fake"},
+            )
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_blast_event_passport_wrong_quarry(db_session: AsyncSession, blaster_user):
+    """GET blast-event with passport_id from a different quarry → 404."""
+    other_quarry = Quarry(name=f"Other Quarry {uuid.uuid4()}")
+    db_session.add(other_quarry)
+    await db_session.flush()
+
+    other_section = SiteSection(
+        quarry_id=other_quarry.id, name="Other Block", block_number="OB-1"
+    )
+    db_session.add(other_section)
+    await db_session.flush()
+
+    other_passport = BlastPassport(
+        site_section_id=other_section.id,
+        created_by_id=blaster_user["user"].id,
+        explosive_type="ANFO",
+        total_explosive_kg=100.0,
+        status=PassportStatus.APPROVED,
+    )
+    db_session.add(other_passport)
+    await db_session.flush()
+
+    q_id = blaster_user["quarry"].id
+    async with _client(db_session, _jwt(blaster_user["sub"])) as ac:
+        resp = await ac.get(
+            f"/api/v1/quarries/{q_id}/passports/{other_passport.id}/blast-event",
+            headers={"Authorization": "Bearer fake"},
+        )
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_analysis_job_result_wrong_session(db_session: AsyncSession):
+    """GET job result using a job_id from a different capture session → 404."""
+    from app.auth.roles import RoleLevel
+    from tests.factories import build_chain, client_for, grant_access, jwt, make_user
+
+    owner = await make_user(db_session)
+    chain_a = await build_chain(db_session, owner)
+    await grant_access(db_session, owner.id, chain_a["quarry"].id, RoleLevel.USER)
+
+    chain_b = await build_chain(db_session, owner)
+
+    async with client_for(db_session, jwt(owner.keycloak_sub)) as ac:
+        resp = await ac.get(
+            f"/api/v1/capture-sessions/{chain_a['capture_session'].id}"
+            f"/jobs/{chain_b['job'].id}/result",
+            headers={"Authorization": "Bearer fake"},
+        )
+    assert resp.status_code == 404

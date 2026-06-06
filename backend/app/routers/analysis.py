@@ -99,7 +99,12 @@ async def get_job_result(
     await check_quarry_access(db, current_user.id, quarry_id, RoleLevel.USER)
 
     result = await db.execute(
-        select(AnalysisResult).where(AnalysisResult.job_id == job_id)
+        select(AnalysisResult)
+        .join(AnalysisJob, AnalysisJob.id == AnalysisResult.job_id)
+        .where(
+            AnalysisResult.job_id == job_id,
+            AnalysisJob.capture_session_id == capture_session_id,
+        )
     )
     analysis_result = result.scalar_one_or_none()
     if analysis_result is None:
