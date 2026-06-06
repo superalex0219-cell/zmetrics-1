@@ -1,5 +1,6 @@
 import '../network/token_provider.dart';
 import 'auth_user.dart';
+import 'jwt_decode.dart';
 import 'oidc_service.dart';
 
 /// Sign-in / sign-out, independent of the concrete auth mechanism.
@@ -57,9 +58,17 @@ class OidcAuthRepository implements AuthRepository {
   Future<AuthUser?> restore() async {
     final token = await _oidc.currentAccessToken();
     if (token == null || token.isEmpty) return null;
-    // A token exists; a full implementation would decode the persisted ID
-    // token for display claims. Kept minimal here.
-    return const AuthUser(id: 'restored', displayName: 'Signed-in user');
+    final claims = decodeJwtClaims(token);
+    final sub = (claims['sub'] as String?) ?? '';
+    if (sub.isEmpty) return null;
+    return AuthUser(
+      id: sub,
+      displayName: (claims['name'] ??
+              claims['preferred_username'] ??
+              claims['email'] ??
+              sub) as String,
+      email: claims['email'] as String?,
+    );
   }
 
   @override

@@ -10,6 +10,7 @@ import 'auth/access_repository.dart';
 import 'auth/auth_event_bus.dart';
 import 'auth/auth_repository.dart';
 import 'auth/dev_password_auth_repository.dart';
+import 'auth/oidc_service.dart';
 import 'config.dart';
 import 'dev/dev_seed_service.dart';
 import 'network/api_client.dart';
@@ -81,10 +82,11 @@ class AppDependencies {
       );
     }
 
-    // Live backend wiring. Auth is dev ROPC (web-friendly, public client) and
-    // also serves as the bearer-token provider for the Dio interceptor.
-    final auth = DevPasswordAuthRepository(config);
-    final TokenProvider tokens = auth;
+    // Live backend wiring — OIDC PKCE via flutter_appauth.
+    // OidcService implements TokenProvider; OidcAuthRepository implements AuthRepository.
+    final oidcService = OidcService(config);
+    final auth = OidcAuthRepository(oidcService);
+    final TokenProvider tokens = oidcService;
     final dio = ApiClient(
       config,
       tokens,

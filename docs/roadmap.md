@@ -52,13 +52,12 @@ Last sync: 2026-06-06 | HEAD: `3be7873`
 
 ## IN PROGRESS / NEXT
 
-### MOB-2 — OIDC PKCE · `mobile/` only
-*Unblocks production deployment. Currently ROPC (password grant) — will break if Keycloak disables it.*
-
-- [ ] Wire `flutter_appauth` (already in pubspec.yaml) for authorization-code + PKCE flow
-- [ ] Replace `DevPasswordAuthRepository` with `OidcAuthRepository` for live mode
-- [ ] Redirect URI registered in `zmetrics-mobile` Keycloak client
-- [ ] Keep ROPC path behind `config.useMockServices` for local dev convenience
+### MOB-2 — OIDC PKCE · `mobile/` only ✅ (pending commit)
+- [x] `AndroidManifest.xml`: `net.openid.appauth.RedirectUriReceiverActivity` + `zmetrics://` intent-filter
+- [x] `di.dart`: live path wires `OidcService` + `OidcAuthRepository`; `DevPasswordAuthRepository` kept
+- [x] `OidcAuthRepository.restore()`: decodes JWT claims via `decodeJwtClaims`
+- [x] `login_screen.dart`: removed ROPC fields; `StatelessWidget`; "Sign in via Keycloak"
+- [x] 2 unit tests (restore) + 2 widget tests (login screen) → 45 total
 
 ### MOB-3 — Capture Flow · `mobile/` only
 *Depends on BACK-SEC-2 being merged first (clean endpoints).*
