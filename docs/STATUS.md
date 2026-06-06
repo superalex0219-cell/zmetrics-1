@@ -46,7 +46,7 @@
 
 | Pri | ID | Item | Layer | Spec |
 |-----|----|------|-------|------|
-| **P1** | MOB-3 | CaptureScreen + SyncProcessor drain + job status polling | mobile | not yet written |
+| **P1** | MOB-3 | CaptureScreen + device picker + SyncProcessor drain + job polling | mobile | `2026-06-06-TASK-mobile-mob3-capture-flow.md` |
 | P3 | MOB-4 | Report export: save JSON to device / share sheet | mobile | not yet written |
 | P3 | M5-a | Rule-based recommendation engine in worker (P80 vs passport target) | worker | not yet written |
 | later | — | OIDC deactivation sync, PDF reports, per-section RBAC | multi | M2+ |
@@ -90,4 +90,5 @@ cd mobile && flutter test
 | File | Task | Status |
 |------|------|--------|
 | `2026-06-06-TASK-backend-sec2-idor-capture.md` | BACK-SEC-2 IDORs | **done** (`aa4c42f`) |
-| `2026-06-06-TASK-mobile-mob2-pkce.md` | MOB-2 OIDC PKCE | **done — pending commit** |
+| `2026-06-06-TASK-mobile-mob2-pkce.md` | MOB-2 OIDC PKCE | **done** (`796823a`) |
+| `2026-06-06-TASK-mobile-mob3-capture-flow.md` | MOB-3 capture flow | **queued** |
