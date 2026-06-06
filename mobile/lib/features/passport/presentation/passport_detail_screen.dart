@@ -23,7 +23,7 @@ class PassportDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ZScaffold(
-      title: 'Passport',
+      title: 'Паспорт БВР',
       body: BlocBuilder<PassportDetailCubit, DataState<BlastPassport>>(
         builder: (context, state) => AsyncView<BlastPassport>(
           state: state,
@@ -47,18 +47,18 @@ class _PassportBody extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Text('Status: ${passport.status.label}',
+        Text('Статус: ${passport.status.label}',
             style: Theme.of(context).textTheme.titleMedium),
-        Text('Revision ${passport.revisionNumber}'),
+        Text('Редакция ${passport.revisionNumber}'),
         const Divider(height: 24),
-        _row('Explosive type', passport.explosiveType),
-        _row('Total explosive', passport.totalExplosiveKg, unit: 'kg'),
-        _row('Hole diameter', passport.holeDiameterMm, unit: 'mm'),
-        _row('Hole depth', passport.holeDepthM, unit: 'm'),
-        _row('Burden', passport.burdenM, unit: 'm'),
-        _row('Spacing', passport.spacingM, unit: 'm'),
-        _row('Stemming', passport.stemmingM, unit: 'm'),
-        _row('Target P80', passport.targetP80Mm, unit: 'mm'),
+        _row('Тип ВВ', passport.explosiveType),
+        _row('Масса ВВ', passport.totalExplosiveKg, unit: 'кг'),
+        _row('Диаметр скв.', passport.holeDiameterMm, unit: 'мм'),
+        _row('Глубина скв.', passport.holeDepthM, unit: 'м'),
+        _row('Линия сопротивления', passport.burdenM, unit: 'м'),
+        _row('Расстояние между скв.', passport.spacingM, unit: 'м'),
+        _row('Забойка', passport.stemmingM, unit: 'м'),
+        _row('Цель P80', passport.targetP80Mm, unit: 'мм'),
         const Divider(height: 24),
         Wrap(
           spacing: 8,
@@ -69,36 +69,36 @@ class _PassportBody extends StatelessWidget {
             if (passport.status.canSubmit && context.canManageBlastingOn(quarryId))
               FilledButton.icon(
                 icon: const Icon(Icons.send),
-                label: const Text('Submit'),
-                onPressed: () => _run(context, cubit.submit, 'Submitted'),
+                label: const Text('Подать'),
+                onPressed: () => _run(context, cubit.submit, 'Паспорт подан'),
               ),
             if (passport.status.canApprove && context.canApproveOn(quarryId))
               FilledButton.icon(
                 icon: const Icon(Icons.verified),
-                label: const Text('Approve'),
-                onPressed: () => _run(context, cubit.approve, 'Approved'),
+                label: const Text('Одобрить'),
+                onPressed: () => _run(context, cubit.approve, 'Паспорт одобрен'),
               ),
             if (passport.status.canComplete && context.canApproveOn(quarryId))
               FilledButton.icon(
                 icon: const Icon(Icons.task_alt),
-                label: const Text('Complete'),
-                onPressed: () => _run(context, cubit.complete, 'Completed'),
+                label: const Text('Завершить'),
+                onPressed: () => _run(context, cubit.complete, 'Паспорт завершён'),
               ),
             if (passport.status.canRevise && context.canManageBlastingOn(quarryId))
               OutlinedButton.icon(
                 icon: const Icon(Icons.history_edu),
-                label: const Text('Create revision'),
-                onPressed: () => _run(context, () => cubit.revise(), 'New revision created'),
+                label: const Text('Создать редакцию'),
+                onPressed: () => _run(context, () => cubit.revise(), 'Новая редакция создана'),
               ),
             OutlinedButton.icon(
               icon: const Icon(Icons.camera_alt_outlined),
-              label: const Text('Captures'),
+              label: const Text('Съемки'),
               onPressed: () => context.go(
                   '/quarries/$quarryId/passports/${passport.id}/captures'),
             ),
             OutlinedButton.icon(
               icon: const Icon(Icons.analytics_outlined),
-              label: const Text('Reports'),
+              label: const Text('Отчёты'),
               onPressed: () => context.go('/quarries/$quarryId/reports'),
             ),
           ],

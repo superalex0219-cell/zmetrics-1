@@ -7,7 +7,9 @@ import '../../../core/auth/auth_cubit.dart';
 import '../../../core/dev/dev_seed_service.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../shared/bloc/data_state.dart';
+import '../../../shared/offline/sync_cubit.dart';
 import '../../../shared/widgets/async_view.dart';
+import '../../../shared/widgets/stat_card.dart';
 import '../../../shared/widgets/z_scaffold.dart';
 import '../application/quarries_cubit.dart';
 import '../domain/quarry.dart';
@@ -18,15 +20,15 @@ class QuarriesScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ZScaffold(
-      title: 'Quarries',
+      title: 'Карьеры',
       actions: [
         IconButton(
-          tooltip: 'Seed demo data',
+          tooltip: 'Загрузить демо-данные',
           icon: const Icon(Icons.science_outlined),
           onPressed: () => _seedDemo(context),
         ),
         IconButton(
-          tooltip: 'Sign out',
+          tooltip: 'Выйти',
           icon: const Icon(Icons.logout),
           onPressed: () => context.read<AuthCubit>().signOut(),
         ),
@@ -45,23 +47,59 @@ class QuarriesScreen extends StatelessWidget {
           onRetry: () => context.read<QuarriesCubit>().load(),
           onData: (context, quarries) {
             if (quarries.isEmpty) {
-              return const Center(child: Text('No quarries yet.'));
+              return const Center(child: Text('Нет карьеров.'));
             }
-            return ListView.separated(
-              itemCount: quarries.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (context, i) {
-                final q = quarries[i];
-                return ListTile(
-                  leading: const Icon(Icons.terrain),
-                  title: Text(q.name),
-                  subtitle: q.latitude != null && q.longitude != null
-                      ? Text('${q.latitude}, ${q.longitude}')
-                      : null,
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => context.go('/quarries/${q.id}'),
-                );
-              },
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: StatCard(
+                          icon: Icons.terrain,
+                          label: 'Карьеры',
+                          value: '${quarries.length}',
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: BlocBuilder<SyncCubit, SyncState>(
+                          builder: (context, sync) => StatCard(
+                            icon: sync.online
+                                ? Icons.cloud_done
+                                : Icons.cloud_off,
+                            label: 'Подключение',
+                            value: sync.online ? 'Онлайн' : 'Оффлайн',
+                            valueColor: sync.online
+                                ? const Color(0xFF0F766E)
+                                : Colors.orange.shade800,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: ListView.separated(
+                    itemCount: quarries.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, i) {
+                      final q = quarries[i];
+                      return ListTile(
+                        leading: const Icon(Icons.terrain),
+                        title: Text(q.name),
+                        subtitle: q.latitude != null && q.longitude != null
+                            ? Text('${q.latitude}, ${q.longitude}')
+                            : null,
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => context.go('/quarries/${q.id}'),
+                      );
+                    },
+                  ),
+                ),
+              ],
             );
           },
         ),
@@ -77,14 +115,14 @@ class QuarriesScreen extends StatelessWidget {
       final result = await context.read<DevSeedService>().seed();
       await cubit.load();
       messenger.showSnackBar(SnackBar(
-        content: const Text('Demo data ready'),
+        content: const Text('Демо-данные загружены'),
         action: SnackBarAction(
-          label: 'Open report',
+          label: 'Открыть отчет',
           onPressed: () => router.go('/reports/${result.reportId}'),
         ),
       ));
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Seed failed: ${friendlyError(e)}')));
+      messenger.showSnackBar(SnackBar(content: Text('Ошибка загрузки: ${friendlyError(e)}')));
     }
   }
 
@@ -95,20 +133,20 @@ class QuarriesScreen extends StatelessWidget {
     final name = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('New quarry'),
+        title: const Text('Новый карьер'),
         content: TextField(
           controller: controller,
           autofocus: true,
-          decoration: const InputDecoration(labelText: 'Name'),
+          decoration: const InputDecoration(labelText: 'Название'),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            child: const Text('Отмена'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-            child: const Text('Create'),
+            child: const Text('Создать'),
           ),
         ],
       ),

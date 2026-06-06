@@ -19,9 +19,9 @@ class OfflineBanner extends StatelessWidget {
             ? (Colors.orange.shade800, Icons.cloud_off, _offlineText(state))
             : state.exhaustedCount > 0
                 ? (Colors.red.shade700, Icons.sync_problem,
-                    '${state.exhaustedCount} upload(s) failed — tap to retry')
+                    '${state.exhaustedCount} завершились ошибкой — нажмите для повтора')
                 : (Colors.blueGrey, Icons.cloud_upload,
-                    '${state.pendingCount} pending upload(s)…');
+                    '${state.pendingCount} загрузок в очереди…');
         return Material(
           color: color,
           child: InkWell(
@@ -46,6 +46,6 @@ class OfflineBanner extends StatelessWidget {
   }
 
   String _offlineText(SyncState state) => state.pendingCount > 0
-      ? 'Offline — ${state.pendingCount} change(s) will sync when reconnected'
-      : 'Offline';
+      ? 'Оффлайн — ${state.pendingCount} изм. синхронизируются при подключении'
+      : 'Оффлайн';
 }

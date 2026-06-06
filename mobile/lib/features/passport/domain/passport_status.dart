@@ -26,13 +26,13 @@ enum PassportStatus {
   superseded;
 
   String get label => switch (this) {
-        PassportStatus.draft => 'Draft',
-        PassportStatus.submitted => 'Submitted',
-        PassportStatus.approved => 'Approved',
-        PassportStatus.active => 'Active',
-        PassportStatus.completed => 'Completed',
-        PassportStatus.cancelled => 'Cancelled',
-        PassportStatus.superseded => 'Superseded',
+        PassportStatus.draft => 'Черновик',
+        PassportStatus.submitted => 'Подан',
+        PassportStatus.approved => 'Одобрен',
+        PassportStatus.active => 'Активен',
+        PassportStatus.completed => 'Завершён',
+        PassportStatus.cancelled => 'Отменён',
+        PassportStatus.superseded => 'Устарел',
       };
 
   /// Whether a blaster may submit this passport (DRAFT → SUBMITTED).

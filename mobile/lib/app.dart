@@ -90,8 +90,16 @@ class _ZMetricsAppState extends State<ZMetricsApp> {
         child: MaterialApp.router(
           title: 'ZMetrics',
           theme: ThemeData(
-            colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF1A56DB)),
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: const Color(0xFF0F766E),
+            ),
             useMaterial3: true,
+            appBarTheme: const AppBarTheme(
+              backgroundColor: Color(0xFF17202A),
+              foregroundColor: Colors.white,
+              iconTheme: IconThemeData(color: Colors.white),
+              actionsIconTheme: IconThemeData(color: Colors.white),
+            ),
           ),
           routerConfig: _router,
         ),

@@ -18,17 +18,17 @@ class SectionsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ZScaffold(
-      title: 'Sections',
+      title: 'Участки',
       actions: [
         TextButton.icon(
           onPressed: () => context.go('/quarries/$quarryId/reports'),
           icon: const Icon(Icons.analytics_outlined, color: Colors.white),
-          label: const Text('Reports', style: TextStyle(color: Colors.white)),
+          label: const Text('Отчёты', style: TextStyle(color: Colors.white)),
         ),
         TextButton.icon(
           onPressed: () => context.go('/quarries/$quarryId/passports'),
           icon: const Icon(Icons.description, color: Colors.white),
-          label: const Text('Passports', style: TextStyle(color: Colors.white)),
+          label: const Text('Паспорта', style: TextStyle(color: Colors.white)),
         ),
       ],
       // Creating a section requires blaster+ (backend enforces).
@@ -44,7 +44,7 @@ class SectionsScreen extends StatelessWidget {
           onRetry: () => context.read<SectionsCubit>().load(),
           onData: (context, sections) {
             if (sections.isEmpty) {
-              return const Center(child: Text('No sections yet.'));
+              return const Center(child: Text('Нет участков.'));
             }
             return ListView.separated(
               itemCount: sections.length,
@@ -54,7 +54,7 @@ class SectionsScreen extends StatelessWidget {
                 return ListTile(
                   leading: CircleAvatar(child: Text(s.blockNumber ?? '–')),
                   title: Text(s.name),
-                  subtitle: Text('Block ${s.blockNumber ?? '—'}'),
+                  subtitle: Text('Блок ${s.blockNumber ?? '—'}'),
                   trailing: IconButton(
                     tooltip: 'Capture',
                     icon: const Icon(Icons.camera_alt_outlined),
@@ -78,29 +78,29 @@ class SectionsScreen extends StatelessWidget {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('New section'),
+        title: const Text('Новый участок'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: nameCtrl,
               autofocus: true,
-              decoration: const InputDecoration(labelText: 'Name'),
+              decoration: const InputDecoration(labelText: 'Название'),
             ),
             TextField(
               controller: blockCtrl,
-              decoration: const InputDecoration(labelText: 'Block number'),
+              decoration: const InputDecoration(labelText: 'Номер блока'),
             ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: const Text('Отмена'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Create'),
+            child: const Text('Создать'),
           ),
         ],
       ),
@@ -112,7 +112,7 @@ class SectionsScreen extends StatelessWidget {
         blockNumber: blockCtrl.text.trim().isEmpty ? null : blockCtrl.text.trim(),
       );
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Failed: $e')));
+      messenger.showSnackBar(SnackBar(content: Text('Ошибка: $e')));
     }
   }
 }

@@ -15,7 +15,7 @@ class ReportsListScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ZScaffold(
-      title: 'Reports',
+      title: 'Отчёты',
       body: BlocBuilder<ReportsListCubit, DataState<List<Report>>>(
         builder: (context, state) => AsyncView<List<Report>>(
           state: state,
@@ -26,8 +26,7 @@ class ReportsListScreen extends StatelessWidget {
                 child: Padding(
                   padding: EdgeInsets.all(24),
                   child: Text(
-                    'No reports yet. Reports are generated automatically after '
-                    'an analysis job completes.',
+                    'Нет отчётов. Отчёты создаются автоматически после завершения анализа.',
                     textAlign: TextAlign.center,
                   ),
                 ),
@@ -45,9 +44,9 @@ class ReportsListScreen extends StatelessWidget {
                         : Icons.analytics_outlined,
                     color: r.analysisMethod.isMock ? Colors.amber.shade800 : null,
                   ),
-                  title: Text(r.title ?? 'Report ${r.id.substring(0, 8)}…'),
+                  title: Text(r.title ?? 'Отчет ${r.id.substring(0, 8)}…'),
                   subtitle: Text(r.analysisMethod.isMock
-                      ? 'Mock pipeline (synthetic)'
+                      ? '⚠ Синтетические данные (mock-пайплайн)'
                       : r.analysisMethod.name),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => context.go('/reports/${r.id}'),

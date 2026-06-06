@@ -18,14 +18,14 @@ class PassportListScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ZScaffold(
-      title: 'Passports (БВР)',
+      title: 'Паспорта БВР',
       // Only blaster+ may create passports (backend enforces; this hides the
       // dead-end for everyone else).
       floatingActionButton: context.canManageBlastingOn(quarryId)
           ? FloatingActionButton.extended(
               onPressed: () => context.go('/quarries/$quarryId/passports/new'),
               icon: const Icon(Icons.add),
-              label: const Text('New passport'),
+              label: const Text('Новый паспорт'),
             )
           : null,
       body: BlocBuilder<PassportListCubit, DataState<List<BlastPassport>>>(
@@ -34,7 +34,7 @@ class PassportListScreen extends StatelessWidget {
           onRetry: () => context.read<PassportListCubit>().load(),
           onData: (context, passports) {
             if (passports.isEmpty) {
-              return const Center(child: Text('No passports yet.'));
+              return const Center(child: Text('Нет паспортов.'));
             }
             return ListView.separated(
               itemCount: passports.length,
@@ -43,8 +43,8 @@ class PassportListScreen extends StatelessWidget {
                 final p = passports[i];
                 return ListTile(
                   leading: const Icon(Icons.description_outlined),
-                  title: Text('${p.explosiveType ?? 'Passport'} · rev ${p.revisionNumber}'),
-                  subtitle: Text('Target P80: ${p.targetP80Mm ?? '—'} mm'),
+                  title: Text('${p.explosiveType ?? 'Паспорт'} · ред. ${p.revisionNumber}'),
+                  subtitle: Text('Цель P80: ${p.targetP80Mm ?? '—'} мм'),
                   trailing: _StatusChip(status: p.status),
                   onTap: () =>
                       context.go('/quarries/$quarryId/passports/${p.id}'),

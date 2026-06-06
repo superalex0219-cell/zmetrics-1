@@ -65,7 +65,7 @@ class _PassportCreateScreenState extends State<PassportCreateScreen> {
   @override
   Widget build(BuildContext context) {
     return ZScaffold(
-      title: 'New passport (БВР)',
+      title: 'Новый паспорт БВР',
       body: FutureBuilder<List<SiteSection>>(
         future: _sectionsFuture,
         builder: (context, snap) {
@@ -87,15 +87,15 @@ class _PassportCreateScreenState extends State<PassportCreateScreen> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Text(
-                    'Enter all parameters manually. Values are NOT pre-filled '
-                    'from AI recommendations — the licensed blaster is '
-                    'responsible for the design.',
+                    'Введите все параметры вручную. Поля НЕ заполняются '
+                    'автоматически из рекомендаций ИИ — ответственность за '
+                    'проект взрывных работ несёт лицензированный взрывник.',
                     style: TextStyle(fontSize: 12),
                   ),
                 ),
                 DropdownButtonFormField<String>(
                   initialValue: _sectionId,
-                  decoration: const InputDecoration(labelText: 'Site section'),
+                  decoration: const InputDecoration(labelText: 'Участок'),
                   items: [
                     for (final s in sections)
                       DropdownMenuItem(
@@ -103,17 +103,17 @@ class _PassportCreateScreenState extends State<PassportCreateScreen> {
                         child: Text('${s.name} (${s.blockNumber ?? '—'})'),
                       ),
                   ],
-                  validator: (v) => v == null ? 'Select a section' : null,
+                  validator: (v) => v == null ? 'Выберите участок' : null,
                   onChanged: (v) => setState(() => _sectionId = v),
                 ),
-                _text(_explosiveType, 'Explosive type'),
-                _number(_totalExplosiveKg, 'Total explosive (kg)'),
-                _number(_holeDiameterMm, 'Hole diameter (mm)'),
-                _number(_holeDepthM, 'Hole depth (m)'),
-                _number(_burdenM, 'Burden (m)'),
-                _number(_spacingM, 'Spacing (m)'),
-                _number(_stemmingM, 'Stemming (m)'),
-                _number(_targetP80Mm, 'Target P80 (mm)'),
+                _text(_explosiveType, 'Тип ВВ'),
+                _number(_totalExplosiveKg, 'Масса ВВ (кг)'),
+                _number(_holeDiameterMm, 'Диаметр скв. (мм)'),
+                _number(_holeDepthM, 'Глубина скв. (м)'),
+                _number(_burdenM, 'Линия сопротивления (м)'),
+                _number(_spacingM, 'Расстояние между скв. (м)'),
+                _number(_stemmingM, 'Забойка (м)'),
+                _number(_targetP80Mm, 'Цель P80 (мм)'),
                 const SizedBox(height: 24),
                 FilledButton.icon(
                   onPressed: _saving ? null : _submit,
@@ -123,7 +123,7 @@ class _PassportCreateScreenState extends State<PassportCreateScreen> {
                           height: 16,
                           child: CircularProgressIndicator(strokeWidth: 2))
                       : const Icon(Icons.save),
-                  label: const Text('Create draft'),
+                  label: const Text('Создать черновик'),
                 ),
               ],
             ),
@@ -152,7 +152,7 @@ class _PassportCreateScreenState extends State<PassportCreateScreen> {
           decoration: InputDecoration(labelText: label),
           validator: (v) {
             if (v == null || v.isEmpty) return null; // optional
-            return double.tryParse(v) == null ? 'Invalid number' : null;
+            return double.tryParse(v) == null ? 'Неверный формат числа' : null;
           },
         ),
       );
@@ -179,12 +179,12 @@ class _PassportCreateScreenState extends State<PassportCreateScreen> {
             ),
           );
       messenger.showSnackBar(
-        const SnackBar(content: Text('Draft passport created')),
+        const SnackBar(content: Text('Черновик паспорта создан')),
       );
       router.go('/quarries/${widget.quarryId}/passports');
     } catch (e) {
       setState(() => _saving = false);
-      messenger.showSnackBar(SnackBar(content: Text('Failed: $e')));
+      messenger.showSnackBar(SnackBar(content: Text('Ошибка: $e')));
     }
   }
 }

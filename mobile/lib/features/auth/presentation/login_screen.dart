@@ -24,12 +24,12 @@ class LoginScreen extends StatelessWidget {
                 return Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.landscape, size: 64, color: Color(0xFF1A56DB)),
+                    const Icon(Icons.landscape, size: 64, color: Color(0xFF0F766E)),
                     const SizedBox(height: 16),
                     Text('ZMetrics',
                         style: Theme.of(context).textTheme.headlineMedium),
                     const SizedBox(height: 4),
-                    Text(mock ? 'Mock mode' : 'Sign in via Keycloak',
+                    Text(mock ? 'Демо-режим' : 'Войдите через Keycloak',
                         style: Theme.of(context).textTheme.bodySmall),
                     const SizedBox(height: 24),
                     if (state is Unauthenticated && state.message != null) ...[
@@ -47,7 +47,7 @@ class LoginScreen extends StatelessWidget {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.login),
-                      label: const Text('Sign in'),
+                      label: const Text('Войти'),
                     ),
                   ],
                 );

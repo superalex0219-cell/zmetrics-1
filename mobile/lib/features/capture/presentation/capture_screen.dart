@@ -51,7 +51,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
-                    'Analysis failed: ${job.errorMessage ?? 'unknown error'}'),
+                    'Ошибка анализа: ${job.errorMessage ?? 'неизвестная ошибка'}'),
               ),
             );
           }
@@ -66,11 +66,11 @@ class _CaptureScreenState extends State<CaptureScreen> {
             state is DataLoaded<CaptureView> && view.canCreateSession;
 
         return ZScaffold(
-          title: 'Capture sessions',
+          title: 'Сессии съемки',
           floatingActionButton: FloatingActionButton.extended(
             onPressed: canCreate ? () => _startSession(context) : null,
             icon: const Icon(Icons.add_a_photo),
-            label: const Text('Start session'),
+            label: const Text('Начать сессию'),
           ),
           body: AsyncView<CaptureView>(
             state: state,
@@ -93,10 +93,10 @@ class _CaptureScreenState extends State<CaptureScreen> {
     try {
       await context.read<CaptureCubit>().createSession();
       messenger.showSnackBar(
-        const SnackBar(content: Text('Session queued (offline-first)')),
+        const SnackBar(content: Text('Сессия добавлена в очередь')),
       );
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Failed: $e')));
+      messenger.showSnackBar(SnackBar(content: Text('Ошибка: $e')));
     }
   }
 
@@ -107,7 +107,7 @@ class _CaptureScreenState extends State<CaptureScreen> {
       final job = await cubit.triggerAnalysis(sessionId);
       unawaited(cubit.pollJobUntilTerminal(sessionId, job.id));
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Failed: $e')));
+      messenger.showSnackBar(SnackBar(content: Text('Ошибка: $e')));
     }
   }
 }
@@ -141,7 +141,7 @@ class _Body extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
             ),
             child: const Text(
-              'No devices registered. Run dev seed from the quarries screen.',
+              'Нет устройств. Загрузите демо-данные на экране «Карьеры».',
               style: TextStyle(fontSize: 13),
             ),
           ),
@@ -150,7 +150,7 @@ class _Body extends StatelessWidget {
         if (view.devices.isNotEmpty) ...[
           DropdownButtonFormField<String>(
             decoration: const InputDecoration(
-              labelText: 'Device',
+              labelText: 'Устройство',
               border: OutlineInputBorder(),
             ),
             value: view.selectedDeviceId,
@@ -169,11 +169,11 @@ class _Body extends StatelessWidget {
           // Calibration dropdown — enabled only after a device is selected
           DropdownButtonFormField<String>(
             decoration: const InputDecoration(
-              labelText: 'Calibration',
+              labelText: 'Калибровка',
               border: OutlineInputBorder(),
             ),
             value: view.selectedCalibrationId,
-            disabledHint: const Text('Select a device first'),
+            disabledHint: const Text('Сначала выберите устройство'),
             items: view.selectedDeviceId == null
                 ? null
                 : view.calibrations
@@ -199,7 +199,7 @@ class _Body extends StatelessWidget {
           Chip(
             avatar: const Icon(Icons.memory, size: 16),
             label:
-                Text('Analyzing… (${view.pollingJob!.status.label.toLowerCase()})'),
+                Text('Анализ… (${view.pollingJob!.status.label.toLowerCase()})'),
           ),
           const SizedBox(height: 12),
         ],
@@ -208,7 +208,7 @@ class _Body extends StatelessWidget {
         if (view.sessions.isEmpty && view.devices.isNotEmpty)
           const Padding(
             padding: EdgeInsets.all(24),
-            child: Center(child: Text('No capture sessions yet.')),
+            child: Center(child: Text('Нет сессий съемки.')),
           ),
         for (final s in view.sessions) _SessionTile(session: s, onAnalyse: onTriggerAnalysis),
       ],
@@ -230,11 +230,11 @@ class _SessionTile extends StatelessWidget {
           session.synced ? Icons.cloud_done : Icons.cloud_upload,
           color: session.synced ? Colors.green : Colors.orange,
         ),
-        title: Text('Session ${session.id.substring(0, 8)}…'),
-        subtitle: Text(session.synced ? 'Synced' : 'Pending sync'),
+        title: Text('Сессия ${session.id.substring(0, 8)}…'),
+        subtitle: Text(session.synced ? 'Синхронизировано' : 'Ожидает синхронизации'),
         trailing: TextButton(
           onPressed: () => onAnalyse(session.id),
-          child: const Text('Analyse'),
+          child: const Text('Анализировать'),
         ),
       ),
     );
