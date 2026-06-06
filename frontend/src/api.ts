@@ -1,0 +1,114 @@
+import Keycloak from "keycloak-js";
+
+import type {
+  AnalysisResult,
+  BlastPassport,
+  Paginated,
+  Quarry,
+  Recommendation,
+  Report,
+  SiteSection,
+} from "./types";
+
+const API_BASE = import.meta.env.VITE_API_URL ?? "/api";
+
+// Singleton Keycloak instance — initialised in main.tsx before React renders.
+export let kc: Keycloak;
+
+export function initKeycloak(): Keycloak {
+  kc = new Keycloak({
+    url: import.meta.env.VITE_KC_URL ?? "http://localhost:8080",
+    realm: import.meta.env.VITE_KC_REALM ?? "zmetrics",
+    clientId: import.meta.env.VITE_KC_CLIENT_ID ?? "zmetrics-web",
+  });
+  return kc;
+}
+
+/** Refresh token if it expires within 30 s, then return Bearer header. */
+async function authHeader(): Promise<Record<string, string>> {
+  if (kc?.authenticated) {
+    await kc.updateToken(30).catch(() => {
+      void kc.login();
+    });
+    return { Authorization: `Bearer ${kc.token ?? ""}` };
+  }
+  return {};
+}
+
+async function get<T>(path: string): Promise<T> {
+  const res = await fetch(`${API_BASE}/v1${path}`, {
+    headers: { ...(await authHeader()), "Content-Type": "application/json" },
+  });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  return res.json() as Promise<T>;
+}
+
+async function post<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${API_BASE}/v1${path}`, {
+    method: "POST",
+    headers: { ...(await authHeader()), "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  return res.json() as Promise<T>;
+}
+
+export async function checkBackend(): Promise<boolean> {
+  try {
+    const res = await fetch("/health");
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** Authenticated file download — fetches with Bearer token, triggers browser save. */
+export async function downloadWithAuth(url: string, filename: string): Promise<void> {
+  const headers = await authHeader();
+  const res = await fetch(url, { headers });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  const blob = await res.blob();
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// ---- Domain API helpers ----
+
+export const api = {
+  quarries: {
+    list: () =>
+      get<Paginated<Quarry>>("/quarries").then((p) => p.items),
+  },
+  sections: {
+    list: (quarryId: string) =>
+      get<Paginated<SiteSection>>(`/quarries/${quarryId}/sections`).then((p) => p.items),
+  },
+  passports: {
+    list: (quarryId: string) =>
+      get<Paginated<BlastPassport>>(`/quarries/${quarryId}/passports`).then((p) => p.items),
+    create: (quarryId: string, body: Partial<BlastPassport> & { site_section_id: string }) =>
+      post<BlastPassport>(`/quarries/${quarryId}/passports`, body),
+  },
+  reports: {
+    list: (quarryId: string) =>
+      get<Paginated<Report>>(`/quarries/${quarryId}/reports`).then((p) => p.items),
+    exportUrl: (reportId: string) => `${API_BASE}/v1/reports/${reportId}/export`,
+  },
+  recommendations: {
+    list: (reportId: string) =>
+      get<Paginated<Recommendation>>(`/reports/${reportId}/recommendations`).then(
+        (p) => p.items,
+      ),
+    review: (reportId: string, recId: string, status: string, notes?: string) =>
+      post<Recommendation>(`/reports/${reportId}/recommendations/${recId}/review`, {
+        status,
+        reviewer_notes: notes ?? null,
+      }),
+  },
+  analysisResults: {
+    get: (id: string) => get<AnalysisResult>(`/analysis-results/${id}`),
+  },
+};
