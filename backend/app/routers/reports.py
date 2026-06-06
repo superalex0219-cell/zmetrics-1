@@ -39,19 +39,50 @@ async def _quarry_id_for_report(report_id: UUID, db: AsyncSession) -> UUID:
     return quarry_id
 
 
+async def _report_read(report: Report, db: AsyncSession) -> ReportRead:
+    """Fetch the safety-label inputs for one report and assemble its ReportRead.
+
+    The mock-vs-real decision itself lives in ReportRead.from_report so it stays
+    a single source of truth shared with the quarry-reports list endpoint.
+    """
+    from app.db.models.analysis import AnalysisJob, AnalysisResult, ModelVersion
+    row = (await db.execute(
+        select(
+            AnalysisResult.confidence_score,
+            ModelVersion.model_type,
+            ModelVersion.version_tag,
+        )
+        .select_from(AnalysisResult)
+        .join(AnalysisJob, AnalysisJob.id == AnalysisResult.job_id)
+        .outerjoin(ModelVersion, ModelVersion.id == AnalysisJob.model_version_id)
+        .where(AnalysisResult.id == report.analysis_result_id)
+    )).first()
+
+    confidence_score = model_type = version_tag = None
+    if row is not None:
+        confidence_score, model_type, version_tag = row
+
+    return ReportRead.from_report(
+        report,
+        confidence_score=confidence_score,
+        model_type=model_type,
+        model_version_tag=version_tag,
+    )
+
+
 @router.get("/{report_id}", response_model=ReportRead)
 async def get_report(
     report_id: UUID,
     current_user: UserProfile = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-) -> Report:
+) -> ReportRead:
     quarry_id = await _quarry_id_for_report(report_id, db)
     await check_quarry_access(db, current_user.id, quarry_id, RoleLevel.USER)
     result = await db.execute(select(Report).where(Report.id == report_id))
     report = result.scalar_one_or_none()
     if report is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
-    return report
+    return await _report_read(report, db)
 
 
 @router.get("/{report_id}/export")

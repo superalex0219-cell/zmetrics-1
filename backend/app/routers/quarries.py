@@ -112,15 +112,23 @@ async def list_quarry_reports(
     current_user: UserProfile = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> PaginatedResponse[ReportRead]:
-    from app.db.models.analysis import AnalysisJob, AnalysisResult
+    from app.db.models.analysis import AnalysisJob, AnalysisResult, ModelVersion
     from app.db.models.blast import BlastEvent
     from app.db.models.capture import CaptureSession
     from app.db.models.passport import BlastPassport
     from app.db.models.report import Report
+    # Single query: pull each report alongside the safety-label inputs
+    # (confidence_score, model_type, version_tag) so there is no per-row N+1.
     base = (
-        select(Report)
+        select(
+            Report,
+            AnalysisResult.confidence_score,
+            ModelVersion.model_type,
+            ModelVersion.version_tag,
+        )
         .join(AnalysisResult, AnalysisResult.id == Report.analysis_result_id)
         .join(AnalysisJob, AnalysisJob.id == AnalysisResult.job_id)
+        .outerjoin(ModelVersion, ModelVersion.id == AnalysisJob.model_version_id)
         .join(CaptureSession, CaptureSession.id == AnalysisJob.capture_session_id)
         .join(BlastEvent, BlastEvent.id == CaptureSession.blast_event_id)
         .join(BlastPassport, BlastPassport.id == BlastEvent.passport_id)
@@ -129,9 +137,19 @@ async def list_quarry_reports(
         .order_by(Report.created_at.desc())
     )
     total = (await db.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
-    items = list((await db.execute(
+    rows = (await db.execute(
         base.offset((page - 1) * page_size).limit(page_size)
-    )).scalars().all())
+    )).all()
+    # Derive the mock-vs-real label via the shared ReportRead.from_report rule so it can't drift.
+    items = [
+        ReportRead.from_report(
+            report,
+            confidence_score=confidence_score,
+            model_type=model_type,
+            model_version_tag=version_tag,
+        )
+        for report, confidence_score, model_type, version_tag in rows
+    ]
     return PaginatedResponse(items=items, total=total, page=page, page_size=page_size)
 
 
