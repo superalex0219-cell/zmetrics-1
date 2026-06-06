@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-06-06 (curating chat)
 **Milestone:** M1 — **COMPLETE** (all features committed, GAP-1/GAP-2 closed, security batch done, 49 tests)
-**Git HEAD:** `1d9ad72` (fix(backend): security hardening) — **3 commits ahead of origin/main** (push pending)
+**Git HEAD:** `9dc2b4a` (feat(mobile): MOB-1 analysis-result wiring) — **4 commits ahead of origin/main** (push pending)
 
 ---
 
@@ -23,7 +23,7 @@
 |-------|-------|-------|
 | **backend** | M1 + security batch complete | 49 tests. SEC-1 IDOR fixed, SEC-2 keycloak_sub removed, SEC-3 dev-seed guarded, DB-1 index added. |
 | **worker** | M1 mock pipeline | 7 mock steps; auto-creates Report + Recommendation (REQUIRES_HUMAN_REVIEW). `db_models.py` hand-synced — SYNC risk. |
-| **mobile** | M1 complete; live granulometry broken | 41 tests. `_withDerivedMethod` workaround + dead `@Default(AnalysisMethod.real)` not yet cleaned. `analysisResultId` not mapped → P10/P50/P80 invisible in live mode. Fix queued. |
+| **mobile** | M1 + MOB-1 complete | 41 tests. Granulometry wired to live backend (`9dc2b4a`). Dead workaround `_withDerivedMethod` removed. |
 | **infra** | stale image | Needs `docker compose build backend` to get SEC-1/2/3/DB-1 + GAP-1/2 changes. |
 
 ---
@@ -40,7 +40,7 @@
 | ✅P2 | SEC-2 | `keycloak_sub` removed from `UserProfileRead` (`1d9ad72`) | backend | CLOSED |
 | ✅P2 | SEC-3 | `dev-seed` guarded by `enable_dev_seed` flag (`1d9ad72`) | backend | CLOSED |
 | ✅P3 | DB-1 | `AnalysisJob.model_version_id` index added (`1d9ad72`) | backend + migration | CLOSED — migration `6929bdaa526b` applied |
-| **P1** | MOB-1 | Granulometry invisible in live mode — `analysisResultId` not mapped | mobile | `GET /api/v1/analysis-results/{id}` exists but mobile never calls it |
+| ✅P1 | MOB-1 | Granulometry wired to live backend (`9dc2b4a`) | mobile | CLOSED — `analysisResultId` mapped, `getAnalysisResult` wired |
 | 3 | — | Report export file-save (web/device) | mobile | Backend `GET /reports/{id}/export` exists; client plumbing not built |
 | M2 | AUD-001/003 | `ip_address` NULL; `GET /quarries/{id}` no per-quarry check | backend | Known pre-existing; deferred |
 | M2 | — | Per-section RBAC; Keycloak deactivation sync; PDF reports; capture flow | multi | Deferred by design |
@@ -74,7 +74,7 @@ docker compose -f infra\docker-compose.yml exec backend alembic current
 
 ## Recent handoffs (newest first)
 
-- `2026-06-06-TASK-mobile-report-wire-analysis-result.md` — next task spec (MOB-1 granulometry)
+- `2026-06-06-TASK-mobile-report-wire-analysis-result.md` — MOB-1 spec (completed `9dc2b4a`)
 - `2026-06-06-TASK-backend-security-hardening.md` — SEC-1/2/3 + DB-1 (completed `1d9ad72`)
 - `2026-06-06-TASK-backend-report-metrics.md` — GAP-1/GAP-2 spec (completed `8a200b6`)
 - `2026-06-06-m1-complete-uncommitted.md` — M1 done, committed `d162899`
