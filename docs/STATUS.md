@@ -85,12 +85,8 @@ cd mobile && flutter test
 
 ---
 
-## Handoffs (newest first)
+## Active handoffs
 
 | File | Task | Status |
 |------|------|--------|
 | `2026-06-06-TASK-backend-sec2-idor-capture.md` | BACK-SEC-2 IDORs | **queued** |
-| `2026-06-06-TASK-mobile-report-wire-analysis-result.md` | MOB-1 granulometry | done `9dc2b4a` |
-| `2026-06-06-TASK-backend-security-hardening.md` | SEC-1/2/3 + DB-1 | done `1d9ad72` |
-| `2026-06-06-TASK-backend-report-metrics.md` | GAP-1/2 | done `8a200b6` |
-| `2026-06-06-m1-complete-uncommitted.md` | M1 commit | done `d162899` |
