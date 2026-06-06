@@ -11,21 +11,56 @@ import '../domain/analysis_result.dart';
 import '../domain/recommendation.dart';
 import '../domain/report.dart';
 
-class ReportScreen extends StatelessWidget {
+class ReportScreen extends StatefulWidget {
   const ReportScreen({super.key});
 
   @override
+  State<ReportScreen> createState() => _ReportScreenState();
+}
+
+class _ReportScreenState extends State<ReportScreen> {
+  bool _exporting = false;
+
+  @override
   Widget build(BuildContext context) {
-    return ZScaffold(
-      title: 'Analysis report',
-      body: BlocBuilder<ReportCubit, DataState<Report>>(
-        builder: (context, state) => AsyncView<Report>(
+    return BlocBuilder<ReportCubit, DataState<Report>>(
+      builder: (context, state) => ZScaffold(
+        title: 'Analysis report',
+        actions: [
+          IconButton(
+            icon: _exporting
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.ios_share),
+            tooltip: 'Export JSON',
+            onPressed:
+                state is DataLoaded && !_exporting ? () => _export(context) : null,
+          ),
+        ],
+        body: AsyncView<Report>(
           state: state,
           onRetry: () => context.read<ReportCubit>().load(),
           onData: (context, report) => _ReportBody(report: report),
         ),
       ),
     );
+  }
+
+  Future<void> _export(BuildContext context) async {
+    setState(() => _exporting = true);
+    try {
+      await context.read<ReportCubit>().export();
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(friendlyError(e))));
+      }
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
   }
 }
 

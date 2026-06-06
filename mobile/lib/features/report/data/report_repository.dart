@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 import 'package:uuid/uuid.dart';
 
@@ -33,6 +36,10 @@ abstract class ReportRepository {
   /// Fetches the granulometry result for a report.
   /// Returns null if the result is not yet available (job still running).
   Future<AnalysisResult?> getAnalysisResult(String analysisResultId);
+
+  /// Returns raw JSON bytes of the export payload.
+  /// Requires BLASTER role on the quarry (enforced server-side).
+  Future<Uint8List> exportReport(String reportId);
 }
 
 /// In-memory stub. The seeded report is explicitly a MOCK-pipeline result
@@ -153,6 +160,24 @@ class MockReportRepository implements ReportRepository {
     }
     return null;
   }
+
+  @override
+  Future<Uint8List> exportReport(String reportId) async {
+    final report = _require(reportId);
+    final json = jsonEncode({
+      'export_format': 'json_placeholder',
+      'note': '⚠ Mock pipeline — results are synthetic.',
+      'report': {'id': report.id, 'summary': report.summary},
+      'analysis_result': report.analysisResult == null
+          ? null
+          : {
+              'p10_mm': report.analysisResult!.p10Mm,
+              'p50_mm': report.analysisResult!.p50Mm,
+              'p80_mm': report.analysisResult!.p80Mm,
+            },
+    });
+    return Uint8List.fromList(utf8.encode(json));
+  }
 }
 
 /// Live implementation against the FastAPI backend.
@@ -240,6 +265,19 @@ class RemoteReportRepository implements ReportRepository {
       final ex = ApiException.fromDio(e);
       if (ex.statusCode == 404) return null;
       throw ex;
+    }
+  }
+
+  @override
+  Future<Uint8List> exportReport(String reportId) async {
+    try {
+      final res = await _dio.get<List<int>>(
+        '/api/v1/reports/$reportId/export',
+        options: Options(responseType: ResponseType.bytes),
+      );
+      return Uint8List.fromList(res.data ?? []);
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
     }
   }
 

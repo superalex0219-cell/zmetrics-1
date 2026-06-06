@@ -38,6 +38,10 @@ dependencies:
   # Client-side idempotency keys for the offline queue
   uuid: ^4.3.3
 
+  # File sharing / downloads
+  share_plus: ^7.2.1
+  path_provider: ^2.1.3
+
   # UI utilities
   cupertino_icons: ^1.0.2
 
