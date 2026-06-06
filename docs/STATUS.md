@@ -1,19 +1,20 @@
 # ZMetrics — STATUS
 
 **Last updated:** 2026-06-06 (curating chat)
-**Milestone:** M1 — **COMPLETE** (all features committed, GAP-1/GAP-2 closed, security batch done, 49 tests)
-**Git HEAD:** `9dc2b4a` (feat(mobile): MOB-1 analysis-result wiring) — **4 commits ahead of origin/main** (push pending)
+**Git HEAD:** `3be7873` — 9 commits ahead of `origin/main` (push pending)
 
 ---
 
 ## TL;DR for the next session
 
-1. `git push` — 3 local commits (`8a200b6`, `ad137d6`, `1d9ad72`) ahead of origin.
-2. **Rebuild containers** to bake in all changes:
-   `docker compose -f infra\docker-compose.yml build backend && docker compose -f infra\docker-compose.yml up -d --force-recreate backend`
-3. **Next coding task:** Mobile — wire analysis-result endpoint + remove dead workarounds.
-   Spec: `docs/handoffs/2026-06-06-TASK-mobile-report-wire-analysis-result.md`.
-   Granulometry (P10/P50/P80) invisible in live mode until this is done.
+1. `git push origin main` — 9 local commits, none pushed yet.
+2. **Rebuild containers** — image is stale since M1 + security batch:
+   ```powershell
+   docker compose -f infra\docker-compose.yml build backend
+   docker compose -f infra\docker-compose.yml up -d --force-recreate backend
+   ```
+3. **Current task:** BACK-SEC-2 — IDOR fixes on capture/blast/analysis endpoints.
+   Spec: `docs/handoffs/2026-06-06-TASK-backend-sec2-idor-capture.md`
 
 ---
 
@@ -21,62 +22,75 @@
 
 | Layer | State | Notes |
 |-------|-------|-------|
-| **backend** | M1 + security batch complete | 49 tests. SEC-1 IDOR fixed, SEC-2 keycloak_sub removed, SEC-3 dev-seed guarded, DB-1 index added. |
-| **worker** | M1 mock pipeline | 7 mock steps; auto-creates Report + Recommendation (REQUIRES_HUMAN_REVIEW). `db_models.py` hand-synced — SYNC risk. |
-| **mobile** | M1 + MOB-1 complete | 41 tests. Granulometry wired to live backend (`9dc2b4a`). Dead workaround `_withDerivedMethod` removed. |
-| **infra** | stale image | Needs `docker compose build backend` to get SEC-1/2/3/DB-1 + GAP-1/2 changes. |
+| **backend** | M1 + SEC-1 batch complete; BACK-SEC-2 queued | 49 tests. 3 IDORs outstanding: `capture_sessions.py`, `blast_events.py`, `analysis.py::get_job_result`. |
+| **worker** | M1 mock pipeline | 7 mock steps; auto-creates Report + Recommendation (`REQUIRES_HUMAN_REVIEW`). `db_models.py` hand-synced — SYNC risk (M6+). |
+| **mobile** | M1 + MOB-1 complete | 41 tests. Granulometry wired to live backend (`9dc2b4a`). Dead `_withDerivedMethod` removed. PKCE/capture flow not yet built. |
+| **infra** | stale image | Needs `docker compose build backend` to pick up SEC-1 batch + GAP-1/2 changes. |
 
 ---
 
-## Open gaps & priority queue
+## Completed work (this session)
 
-| Pri | ID | Item | Layer | Why |
-|-----|----|------|-------|-----|
-| ✅0 | — | M1 committed & pushed (`d162899`→`8a200b6` ahead) | ops | Done; push pending |
-| ✅1 | GAP-2 | `analysis_method` on `ReportRead` (`8a200b6`) | backend | CLOSED — `from_report()` single source of truth |
-| ✅1 | GAP-1 | `GET /api/v1/analysis-results/{id}` (`8a200b6`) | backend | CLOSED — mobile report screen unblocked |
-| ✅2 | — | 5 missing endpoint tests (suite 31→44) | backend | CLOSED |
-| ✅P1 | SEC-1 | `add_comment` IDOR fixed (`1d9ad72`) | backend | CLOSED — rec ownership validated |
-| ✅P2 | SEC-2 | `keycloak_sub` removed from `UserProfileRead` (`1d9ad72`) | backend | CLOSED |
-| ✅P2 | SEC-3 | `dev-seed` guarded by `enable_dev_seed` flag (`1d9ad72`) | backend | CLOSED |
-| ✅P3 | DB-1 | `AnalysisJob.model_version_id` index added (`1d9ad72`) | backend + migration | CLOSED — migration `6929bdaa526b` applied |
-| ✅P1 | MOB-1 | Granulometry wired to live backend (`9dc2b4a`) | mobile | CLOSED — `analysisResultId` mapped, `getAnalysisResult` wired |
-| 3 | — | Report export file-save (web/device) | mobile | Backend `GET /reports/{id}/export` exists; client plumbing not built |
-| M2 | AUD-001/003 | `ip_address` NULL; `GET /quarries/{id}` no per-quarry check | backend | Known pre-existing; deferred |
-| M2 | — | Per-section RBAC; Keycloak deactivation sync; PDF reports; capture flow | multi | Deferred by design |
+| Commit | What |
+|--------|------|
+| `d162899` | M1: backend MVP + Flutter mobile + per-quarry RBAC |
+| `8a200b6` | GAP-1: `GET /api/v1/analysis-results/{id}`; GAP-2: `ReportRead.analysis_method` |
+| `1d9ad72` | SEC-1 IDOR (`add_comment`), SEC-2 (`keycloak_sub` removed), SEC-3 (dev-seed flag), DB-1 (index + migration) |
+| `9dc2b4a` | MOB-1: mobile wires analysis-result endpoint; removes dead `_withDerivedMethod` workaround |
 
 ---
 
-## Safety invariants (must stay true — see .claude/rules/product-safety.md)
+## Priority queue (next tasks)
 
-- `Recommendation` always created `status = requires_human_review`. ✅ (model `__init__` + DB default + worker).
+| Pri | ID | Item | Layer | Spec |
+|-----|----|------|-------|------|
+| **P1** | BACK-SEC-2 | IDOR on `capture_sessions`, `blast_events`, `analysis::get_job_result`; AuditLog for dev_seed | backend | `2026-06-06-TASK-backend-sec2-idor-capture.md` |
+| P2 | MOB-2 | OIDC PKCE via `flutter_appauth` (replace ROPC) | mobile | not yet written |
+| P2 | MOB-3 | CaptureScreen + SyncProcessor drain + job status polling | mobile | not yet written; needs BACK-SEC-2 clean endpoints |
+| P3 | MOB-4 | Report export: save JSON to device / share sheet | mobile | not yet written |
+| P3 | M5-a | Rule-based recommendation engine in worker (P80 vs passport target) | worker | not yet written |
+| later | — | OIDC deactivation sync, PDF reports, per-section RBAC | multi | M2+ |
+
+---
+
+## Safety invariants (must stay true)
+
+- `Recommendation` always created `status = requires_human_review`. ✅
 - No auto-approve / bulk-approve endpoints. ✅
-- Passport transitions are explicit human HTTP actions. ✅ (DRAFT→SUBMITTED→APPROVED→ACTIVE→COMPLETED).
-- AuditLog append-only; written on passport/recommendation/role/access changes. ✅
-- Reports label mock-vs-real prominently. ✅ GAP-2 closed — `ReportRead.analysis_method` derived from `ModelVersion.model_type`.
+- Passport transitions are explicit human HTTP actions. ✅
+- AuditLog append-only; written on state changes. ✅ (gap: dev_seed missing — queued in BACK-SEC-2)
+- Reports label mock-vs-real prominently. ✅ (`ReportRead.analysis_method` from `ModelVersion.model_type`)
 
 ---
 
 ## How to verify current state
 
 ```powershell
-git log --oneline -3
-# expect: 8a200b6 feat(backend): analysis-results endpoint + report safety label
-#         668d2ec docs(status)...
-#         d162899 feat(m1)...
+git log --oneline -5
+# 3be7873 docs(handoff): BACK-SEC-2 task spec
+# 86add37 docs(roadmap): sync with actual state
+# c09cb89 docs(status): close MOB-1
+# 9dc2b4a feat(mobile): MOB-1 analysis-result wiring
+# fcb7a4c docs(status): close SEC-1/2/3/DB-1
 
 docker compose -f infra\docker-compose.yml exec backend pytest -v
-# expect: 44/44 (after rebuild)
+# expect: 49 passing (after rebuild)
 
 docker compose -f infra\docker-compose.yml exec backend alembic current
-# expect: 0002 / head
+# expect: 6929bdaa526b (head)
+
+cd mobile && flutter test
+# expect: 41 passing
 ```
 
-## Recent handoffs (newest first)
+---
 
-- `2026-06-06-TASK-mobile-report-wire-analysis-result.md` — MOB-1 spec (completed `9dc2b4a`)
-- `2026-06-06-TASK-backend-security-hardening.md` — SEC-1/2/3 + DB-1 (completed `1d9ad72`)
-- `2026-06-06-TASK-backend-report-metrics.md` — GAP-1/GAP-2 spec (completed `8a200b6`)
-- `2026-06-06-m1-complete-uncommitted.md` — M1 done, committed `d162899`
-- `2026-06-06-mobile-web-backend-rbac.md` — Flutter app + per-quarry gating
-- `2026-06-06-use-case-gaps-and-me-access.md` — use-case gap closure + `/me/access`
+## Handoffs (newest first)
+
+| File | Task | Status |
+|------|------|--------|
+| `2026-06-06-TASK-backend-sec2-idor-capture.md` | BACK-SEC-2 IDORs | **queued** |
+| `2026-06-06-TASK-mobile-report-wire-analysis-result.md` | MOB-1 granulometry | done `9dc2b4a` |
+| `2026-06-06-TASK-backend-security-hardening.md` | SEC-1/2/3 + DB-1 | done `1d9ad72` |
+| `2026-06-06-TASK-backend-report-metrics.md` | GAP-1/2 | done `8a200b6` |
+| `2026-06-06-m1-complete-uncommitted.md` | M1 commit | done `d162899` |
