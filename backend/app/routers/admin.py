@@ -421,6 +421,7 @@ async def dev_seed(
 @router.get("/audit-logs", response_model=list[dict])
 async def list_audit_logs(
     entity_type: str | None = None,
+    entity_id: UUID | None = None,
     page: int = 1,
     page_size: int = 50,
     current_user: UserProfile = Depends(require_any_admin),
@@ -429,6 +430,8 @@ async def list_audit_logs(
     query = select(AuditLog).order_by(AuditLog.occurred_at.desc())
     if entity_type:
         query = query.where(AuditLog.entity_type == entity_type)
+    if entity_id:
+        query = query.where(AuditLog.entity_id == entity_id)
     query = query.offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(query)
     logs = result.scalars().all()

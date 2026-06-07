@@ -200,8 +200,8 @@ async def _create_report_and_recommendation(
         else None
     )
 
-    p10 = float(ar.p10_mm) if ar.p10_mm is not None else 0.0
-    p50 = float(ar.p50_mm) if ar.p50_mm is not None else 0.0
+    p10: float | None = float(ar.p10_mm) if ar.p10_mm is not None else None
+    p50: float | None = float(ar.p50_mm) if ar.p50_mm is not None else None
     p80 = float(ar.p80_mm) if ar.p80_mm is not None else 0.0
     conf = float(ar.confidence_score) if ar.confidence_score is not None else 0.0
 

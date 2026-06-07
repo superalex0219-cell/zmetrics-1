@@ -64,9 +64,11 @@ export async function checkBackend(): Promise<boolean> {
   }
 }
 
-/** Authenticated file download — fetches with Bearer token, triggers browser save. */
+/** Authenticated file download — fetches with Bearer token, triggers browser save.
+ *  Only attaches auth headers to same-origin API URLs to prevent token leakage. */
 export async function downloadWithAuth(url: string, filename: string): Promise<void> {
-  const headers = await authHeader();
+  const isApiUrl = url.startsWith(API_BASE) || url.startsWith("/api");
+  const headers = isApiUrl ? await authHeader() : {};
   const res = await fetch(url, { headers });
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   const blob = await res.blob();
@@ -119,12 +121,11 @@ export const api = {
     ) => post<BlastEvent>(`/quarries/${quarryId}/passports/${passportId}/blast-event`, body),
   },
   auditLogs: {
-    // Fetches all blast_passport audit entries and filters to one passport client-side.
     // Throws on 403 (non-admin) — callers must catch and treat as an empty list.
-    forPassport: async (passportId: string): Promise<AuditLogEntry[]> => {
-      const all = await get<AuditLogEntry[]>("/admin/audit-logs?entity_type=blast_passport");
-      return all.filter((e) => e.entity_id === passportId);
-    },
+    forPassport: (passportId: string): Promise<AuditLogEntry[]> =>
+      get<AuditLogEntry[]>(
+        `/admin/audit-logs?entity_type=blast_passport&entity_id=${encodeURIComponent(passportId)}&page_size=200`,
+      ),
   },
   reports: {
     list: (quarryId: string) =>
