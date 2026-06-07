@@ -1,6 +1,6 @@
 # ZMetrics — Roadmap
 
-Last sync: 2026-06-07 | HEAD: pending M5-a commit
+Last sync: 2026-06-07 | HEAD: `4435f28`
 
 ---
 
@@ -59,7 +59,7 @@ Last sync: 2026-06-07 | HEAD: pending M5-a commit
 - [x] `frontend` service in docker-compose, nginx proxy, Dockerfile
 - [x] `tsc --noEmit` passes
 
-### M5-a — Rule-based recommendations · `worker/` (pending commit)
+### M5-a — Rule-based recommendations · `worker/` (`4435f28`)
 - [x] `evaluate_fragmentation()` pure function — oversize (`p80 > target × 1.1`), excessive fines (`> 15%`), on_target
 - [x] `parameter_suggestions` JSONB: `observed_p80_mm`, `target_p80_mm`, `deviation_pct`, `basis`; `None` when target unknown
 - [x] `BlastEvent` + `BlastPassport` read-only stubs in `worker/app/db_models.py`

@@ -1,7 +1,7 @@
 # ZMetrics — STATUS
 
 **Last updated:** 2026-06-07 (curating chat)
-**Git HEAD:** pending commit — M5-a rule engine done
+**Git HEAD:** `4435f28` — M5-a rule engine done
 
 ---
 
@@ -44,7 +44,7 @@
 | `f734b97` | MOB-4: report export (share_plus + path_provider); 63 tests |
 | `09ca465` | WEB-1: React frontend wired to backend; Keycloak OIDC; 7 screens live |
 | `ebb28e5` | MOB-DESIGN: teal theme + dark AppBar + Russian labels + StatCard |
-| pending | M5-a: rule engine — evaluate_fragmentation; BlastEvent/BlastPassport stubs; 15 new tests |
+| `4435f28` | M5-a: rule engine — evaluate_fragmentation; BlastEvent/BlastPassport stubs; 15 new tests |
 
 ---
 
@@ -94,7 +94,7 @@ cd mobile && flutter test
 
 | File | Task | Status |
 |------|------|--------|
-| `2026-06-07-TASK-worker-m5a-rule-engine.md` | M5-a rule engine | **done** (pending commit) |
+| `2026-06-07-TASK-worker-m5a-rule-engine.md` | M5-a rule engine | **done** (`4435f28`) |
 | `2026-06-06-TASK-backend-sec2-idor-capture.md` | BACK-SEC-2 IDORs | **done** (`aa4c42f`) |
 | `2026-06-06-TASK-mobile-mob2-pkce.md` | MOB-2 OIDC PKCE | **done** (`796823a`) |
 | `2026-06-06-TASK-mobile-mob3-capture-flow.md` | MOB-3 capture flow | **done** (`760dbb5`) |
