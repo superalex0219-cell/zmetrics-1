@@ -139,16 +139,16 @@ Bug hunts are periodic code-review tasks run by an executor agent (no UI needed)
 
 ## BACKLOG
 
-### BUG-HUNT-1 — Frontend error states & edge cases · `frontend/`
+### BUG-HUNT-1 — Frontend error states & edge cases · `frontend/` (`5316cad`)
 *Periodic. Run whenever ≥2 new frontend features land. No UI access needed — code review only.*
 
-- [ ] Empty states: каждый список имеет fallback (нет данных / не вошли)
-- [ ] Loading states: не мигают, нет двойного fetch
-- [ ] Network error: fetch в `useEffect` не проглатывает ошибки молча (`.catch(console.error)` — минимум)
-- [ ] `Promise.allSettled` usage: все блоки используют `allSettled` там, где 404/403 ожидаемы
-- [ ] Типизация: `tsc --noEmit` чистый, нет `as unknown as X`
-- [ ] `parameter_suggestions` — проверить что нет кода, записывающего значения обратно в паспорт
-- [ ] Audit log: проверить что нет кнопки "удалить запись"
+- [x] Empty states: каждый список имеет fallback (нет данных / не вошли)
+- [x] Loading states: не мигают, нет двойного fetch
+- [x] Network error: fetch в `useEffect` не проглатывает ошибки молча — исправлено `5316cad`
+- [x] `Promise.allSettled` usage: все блоки используют `allSettled` там, где 404/403 ожидаемы — исправлено `5316cad`
+- [x] Типизация: `tsc --noEmit` чистый, нет `as unknown as X`
+- [x] `parameter_suggestions` — нет кода, записывающего значения обратно в паспорт
+- [x] Audit log: нет кнопки "удалить запись"
 
 ### BUG-HUNT-2 — Backend security & data integrity · `backend/`
 *Periodic. Run whenever ≥2 новых endpoint-а добавлено. Read-only code review.*

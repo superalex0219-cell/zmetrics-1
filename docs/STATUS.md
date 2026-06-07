@@ -1,7 +1,7 @@
 # ZMetrics — STATUS
 
 **Last updated:** 2026-06-07
-**Git HEAD:** `BUG-HUNT-1` — frontend Promise.allSettled + error handling
+**Git HEAD:** `5316cad` — BUG-HUNT-1 frontend fixes
 
 ---
 
@@ -48,7 +48,7 @@
 | `849e1f9` | WEB-2: passport detail panel, status transitions, blast event form, audit log |
 | `7fa824d` | docs: roadmap UT/BUG-HUNT sections added |
 | `c077029` | ARCH fixes: downloadWithAuth origin check; p10/p50 None; audit-logs entity_id filter |
-| *(next)* | BUG-HUNT-1: Promise.allSettled для concurrent fetch; try/catch в handleLoadRecommendations |
+| `5316cad` | BUG-HUNT-1: Promise.allSettled для concurrent fetch; try/catch в handleLoadRecommendations |
 
 ---
 
