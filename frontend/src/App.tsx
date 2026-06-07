@@ -88,36 +88,49 @@ export default function App() {
   useEffect(() => {
     if (!selectedQuarryId) return;
 
-    Promise.all([
+    void Promise.allSettled([
       api.sections.list(selectedQuarryId),
       api.passports.list(selectedQuarryId),
       api.reports.list(selectedQuarryId),
-    ])
-      .then(([sects, passps, reps]) => {
-        setSections(sects);
-        setPassports(passps);
-        setReports(reps);
-        if (reps.length > 0) {
-          api.analysisResults
-            .get(reps[0].analysis_result_id)
-            .then(setLatestAnalysisResult)
-            .catch(console.error);
-        } else {
-          setLatestAnalysisResult(null);
-        }
-      })
-      .catch(console.error);
+    ]).then(([sectsResult, passpsResult, repsResult]) => {
+      if (sectsResult.status === "fulfilled") setSections(sectsResult.value);
+      else console.error(sectsResult.reason);
+
+      if (passpsResult.status === "fulfilled") setPassports(passpsResult.value);
+      else console.error(passpsResult.reason);
+
+      const reps = repsResult.status === "fulfilled" ? repsResult.value : [];
+      if (repsResult.status === "rejected") console.error(repsResult.reason);
+      setReports(reps);
+
+      if (reps.length > 0) {
+        api.analysisResults
+          .get(reps[0].analysis_result_id)
+          .then(setLatestAnalysisResult)
+          .catch(console.error);
+      } else {
+        setLatestAnalysisResult(null);
+      }
+    });
   }, [selectedQuarryId]);
 
   const handleLoadRecommendations = async (reportId: string) => {
-    const recs = await api.recommendations.list(reportId);
-    setRecommendations(recs);
-    setActive("recommendations");
+    try {
+      const recs = await api.recommendations.list(reportId);
+      setRecommendations(recs);
+      setActive("recommendations");
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const handleReviewRecommendation = async (rec: Recommendation, status: string) => {
-    const updated = await api.recommendations.review(rec.report_id, rec.id, status);
-    setRecommendations((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+    try {
+      const updated = await api.recommendations.review(rec.report_id, rec.id, status);
+      setRecommendations((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   return (
