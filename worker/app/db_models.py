@@ -92,6 +92,29 @@ class BlastPassport(Base):
     target_p80_mm: Mapped[float | None] = mapped_column(Numeric(8, 2), nullable=True)
 
 
+class ArtifactType(str, enum.Enum):
+    LEFT_FRAME = "left_frame"
+    RIGHT_FRAME = "right_frame"
+    DEPTH_MAP = "depth_map"
+    POINT_CLOUD = "point_cloud"
+    MASK = "mask"
+    PARTICLE_LIST = "particle_list"
+    REPORT_FILE = "report_file"
+
+
+class Artifact(Base):
+    """Read-only stub: worker reads left_frame minio_key for SAM3 segmentation."""
+    __tablename__ = "artifact"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    capture_session_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    artifact_type: Mapped[ArtifactType] = mapped_column(
+        SAEnum(ArtifactType, name="artifact_type", create_type=False), nullable=False
+    )
+    minio_key: Mapped[str] = mapped_column(String(1000), nullable=False)
+    frame_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
 class RecommendationStatus(str, enum.Enum):
     REQUIRES_HUMAN_REVIEW = "requires_human_review"
     DRAFT = "draft"

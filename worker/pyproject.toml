@@ -21,6 +21,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+sam3 = [
+    "torch>=2.3.0",
+    "transformers>=4.47.0",
+    "Pillow>=10.3.0",
+    "opencv-python-headless>=4.9.0",
+]
 cv = [
     "opencv-python-headless>=4.9.0",
     "open3d>=0.18.0",

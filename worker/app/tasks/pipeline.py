@@ -37,7 +37,7 @@ async def _run_pipeline_async(job_id: UUID) -> dict:
     from app.pipeline.mock_particles import MockParticleVolumeStep
     from app.pipeline.mock_pointcloud import MockPointCloudStep
     from app.pipeline.mock_rectification import MockRectificationStep
-    from app.pipeline.mock_segmentation import MockSegmentationStep
+    from app.pipeline.sam3_segmentation import Sam3SegmentationStep
 
     settings = get_settings()
 
@@ -81,7 +81,11 @@ async def _run_pipeline_async(job_id: UUID) -> dict:
             MockRectificationStep(),
             MockDepthStep(),
             MockPointCloudStep(),
-            MockSegmentationStep(),
+            Sam3SegmentationStep(
+                model_path=settings.sam3_model_path,
+                text_prompt=settings.sam3_text_prompt,
+                threshold=settings.sam3_confidence_threshold,
+            ),
             MockParticleVolumeStep(),
             MockGranulometryStep(),
         ])

@@ -125,10 +125,22 @@ services:
       MINIO_BUCKET_FRAMES: ${MINIO_BUCKET_FRAMES}
       MINIO_BUCKET_ARTIFACTS: ${MINIO_BUCKET_ARTIFACTS}
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
+      SAM3_MODEL_PATH: ${SAM3_MODEL_PATH:-/models/sam3}
+      SAM3_TEXT_PROMPT: ${SAM3_TEXT_PROMPT:-rock fragment}
+      SAM3_CONFIDENCE_THRESHOLD: ${SAM3_CONFIDENCE_THRESHOLD:-0.5}
+    volumes:
+      - ${SAM3_WEIGHTS_DIR:-../models/sam3}:/models/sam3:ro
     command: >
       celery -A app.celery_app worker
       --loglevel=info
       --concurrency=${WORKER_CONCURRENCY:-2}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     depends_on:
       postgres:
         condition: service_healthy
