@@ -1,7 +1,7 @@
 # ZMetrics — STATUS
 
 **Last updated:** 2026-06-07 (curating chat)
-**Git HEAD:** `ebb28e5` — WEB-1 + MOB-DESIGN done
+**Git HEAD:** pending commit — M5-a rule engine done
 
 ---
 
@@ -23,7 +23,7 @@
 | Layer | State | Notes |
 |-------|-------|-------|
 | **backend** | M1 + SEC-1 + BACK-SEC-2 complete | 53 tests. All IDOR gaps closed. AuditLog complete for role_assigned. Magic-byte validation on artifact upload. |
-| **worker** | M1 mock pipeline | 7 mock steps; auto-creates Report + Recommendation (`REQUIRES_HUMAN_REVIEW`). `db_models.py` hand-synced — SYNC risk (M6+). |
+| **worker** | M1 + M5-a rule engine | 7 mock steps + rule engine. `evaluate_fragmentation` flags oversize/fines vs passport target_p80_mm. `parameter_suggestions` JSONB populated. `db_models.py` hand-synced — SYNC risk (M6+). |
 | **frontend** | WEB-1 complete | React + Vite + Keycloak OIDC. 7 screens wired to real API. Mock badge, read-only parameter_suggestions, review buttons. Dockerised. |
 | **mobile** | M1 + MOB-1/2/3/4 + MOB-DESIGN | 63 tests. Teal theme + dark AppBar. Russian labels. StatCard widget. |
 | **infra** | stale image | Needs `docker compose build backend` to pick up SEC-1 batch + GAP-1/2 changes. |
@@ -44,6 +44,7 @@
 | `f734b97` | MOB-4: report export (share_plus + path_provider); 63 tests |
 | `09ca465` | WEB-1: React frontend wired to backend; Keycloak OIDC; 7 screens live |
 | `ebb28e5` | MOB-DESIGN: teal theme + dark AppBar + Russian labels + StatCard |
+| pending | M5-a: rule engine — evaluate_fragmentation; BlastEvent/BlastPassport stubs; 15 new tests |
 
 ---
 
@@ -51,7 +52,7 @@
 
 | Pri | ID | Item | Layer | Spec |
 |-----|----|------|-------|------|
-| **P2** | M5-a | Rule engine in worker: P80 vs target → structured Recommendation | worker | not yet written |
+| **P2** | WEB-2 | Passport workflow in web: detail view, state transitions, blast event form | frontend | not yet written |
 | P3 | M5-b | LLM explanation layer for recommendations (Claude API) | worker | depends M5-a |
 | later | — | OIDC deactivation sync, PDF reports, per-section RBAC | multi | M2+ |
 
@@ -93,6 +94,7 @@ cd mobile && flutter test
 
 | File | Task | Status |
 |------|------|--------|
+| `2026-06-07-TASK-worker-m5a-rule-engine.md` | M5-a rule engine | **done** (pending commit) |
 | `2026-06-06-TASK-backend-sec2-idor-capture.md` | BACK-SEC-2 IDORs | **done** (`aa4c42f`) |
 | `2026-06-06-TASK-mobile-mob2-pkce.md` | MOB-2 OIDC PKCE | **done** (`796823a`) |
 | `2026-06-06-TASK-mobile-mob3-capture-flow.md` | MOB-3 capture flow | **done** (`760dbb5`) |

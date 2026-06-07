@@ -72,7 +72,24 @@ class CaptureSession(Base):
     __tablename__ = "capture_session"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    blast_event_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     captured_by_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+
+
+class BlastEvent(Base):
+    """Read-only stub: worker only needs to walk to the passport."""
+    __tablename__ = "blast_event"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    passport_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+
+
+class BlastPassport(Base):
+    """Read-only stub: worker only reads target_p80_mm for rule evaluation."""
+    __tablename__ = "blast_passport"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    target_p80_mm: Mapped[float | None] = mapped_column(Numeric(8, 2), nullable=True)
 
 
 class RecommendationStatus(str, enum.Enum):

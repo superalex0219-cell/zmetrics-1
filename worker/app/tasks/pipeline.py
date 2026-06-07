@@ -158,11 +158,14 @@ async def _create_report_and_recommendation(
 
     from app.db_models import (
         AnalysisResult,
+        BlastEvent,
+        BlastPassport,
         CaptureSession,
         Recommendation,
         RecommendationStatus,
         Report,
     )
+    from app.rules import evaluate_fragmentation
 
     # Get AnalysisResult created by granulometry step
     ar = (await db.execute(
@@ -180,6 +183,23 @@ async def _create_report_and_recommendation(
         logger.warning("pipeline_no_capture_session", job_id=str(job_id))
         return
 
+    # Resolve BlastPassport to get target_p80_mm for rule evaluation
+    blast_event = (await db.execute(
+        select(BlastEvent).where(BlastEvent.id == session.blast_event_id)
+    )).scalar_one_or_none()
+
+    passport = None
+    if blast_event is not None:
+        passport = (await db.execute(
+            select(BlastPassport).where(BlastPassport.id == blast_event.passport_id)
+        )).scalar_one_or_none()
+
+    target_p80_mm = (
+        float(passport.target_p80_mm)
+        if (passport and passport.target_p80_mm is not None)
+        else None
+    )
+
     p10 = float(ar.p10_mm) if ar.p10_mm is not None else 0.0
     p50 = float(ar.p50_mm) if ar.p50_mm is not None else 0.0
     p80 = float(ar.p80_mm) if ar.p80_mm is not None else 0.0
@@ -194,31 +214,38 @@ async def _create_report_and_recommendation(
     db.add(report)
     await db.flush()
 
-    rec_text = (
-        f"⚠ Mock pipeline — results are synthetic. "
-        f"P10={p10:.0f}mm, P50={p50:.0f}mm, P80={p80:.0f}mm. "
-        f"Confidence={conf:.2f}. "
+    rule_result = evaluate_fragmentation(
+        p80_mm=p80,
+        fines_percent=float(ar.fines_percent) if ar.fines_percent is not None else 0.0,
+        confidence_score=conf,
+        target_p80_mm=target_p80_mm,
+        p10_mm=p10,
+        p50_mm=p50,
     )
-    if conf < 0.5:
-        rec_text += "Low confidence — manual re-capture strongly recommended. "
-    rec_text += "Review fragmentation metrics and compare against passport target before any design changes."
 
     # SAFETY: always REQUIRES_HUMAN_REVIEW — never auto-accept.
     recommendation = Recommendation(
         report_id=report.id,
         generated_by_id=session.captured_by_id,
         status=RecommendationStatus.REQUIRES_HUMAN_REVIEW,
-        recommendation_text=rec_text,
-        parameter_suggestions=None,
+        recommendation_text=rule_result.recommendation_text,
+        parameter_suggestions=rule_result.parameter_suggestions,
     )
     db.add(recommendation)
     await db.flush()
+
+    # Append rule-engine confidence notes without clobbering the original mock note.
+    if rule_result.confidence_notes:
+        existing = ar.confidence_notes or ""
+        ar.confidence_notes = (existing + " | " + rule_result.confidence_notes).lstrip(" | ")
 
     logger.info(
         "pipeline_report_created",
         job_id=str(job_id),
         report_id=str(report.id),
         p80=p80,
+        target_p80_mm=target_p80_mm,
+        flags=rule_result.flags,
         confidence=conf,
     )
 

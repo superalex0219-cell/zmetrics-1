@@ -1,6 +1,6 @@
 # ZMetrics — Roadmap
 
-Last sync: 2026-06-07 | HEAD: `ff562ad`
+Last sync: 2026-06-07 | HEAD: pending M5-a commit
 
 ---
 
@@ -59,18 +59,17 @@ Last sync: 2026-06-07 | HEAD: `ff562ad`
 - [x] `frontend` service in docker-compose, nginx proxy, Dockerfile
 - [x] `tsc --noEmit` passes
 
+### M5-a — Rule-based recommendations · `worker/` (pending commit)
+- [x] `evaluate_fragmentation()` pure function — oversize (`p80 > target × 1.1`), excessive fines (`> 15%`), on_target
+- [x] `parameter_suggestions` JSONB: `observed_p80_mm`, `target_p80_mm`, `deviation_pct`, `basis`; `None` when target unknown
+- [x] `BlastEvent` + `BlastPassport` read-only stubs in `worker/app/db_models.py`
+- [x] Join chain `CaptureSession → BlastEvent → BlastPassport` in `_create_report_and_recommendation`
+- [x] `confidence_notes` auto-populated when `confidence_score < 0.8`
+- [x] 15 unit tests for rule logic
+
 ---
 
 ## BACKLOG
-
-### M5-a — Rule-based recommendations · `worker/`
-*High value. No hardware needed. Worker currently writes static placeholder recommendation text.*
-
-- [ ] Compare `AnalysisResult.p80_mm` vs `BlastPassport.target_p80_mm`
-- [ ] Flag oversize (p80 > target × 1.1) and excessive fines (`fines_percent > 15%`)
-- [ ] Write structured `Recommendation.parameter_suggestions` JSONB with basis text
-- [ ] `confidence_notes` auto-populated when `confidence_score < 0.8`
-- [ ] Unit tests for rule logic (no DB needed)
 
 ### WEB-2 — Passport workflow in web · `frontend/`
 *Web currently has passport list + basic create. Missing the full workflow.*
