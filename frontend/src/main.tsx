@@ -8,8 +8,7 @@ import "./styles.css";
 const kc = initKeycloak();
 
 kc.init({
-  onLoad: "check-sso",
-  silentCheckSsoRedirectUri: `${window.location.origin}/silent-check-sso.html`,
+  onLoad: "login-required",
   pkceMethod: "S256",
 }).then(() => {
   ReactDOM.createRoot(document.getElementById("root")!).render(

@@ -122,6 +122,13 @@ def _run_inference(
     import torch
 
     inputs = processor(images=image, text=text_prompt, return_tensors="pt")
+
+    # Extract original_sizes before moving tensors to device (needed for post-processing)
+    if "original_sizes" in inputs:
+        original_sizes = inputs["original_sizes"].tolist()
+    else:
+        original_sizes = [[image.height, image.width]]
+
     inputs = {k: v.to(device) if hasattr(v, "to") else v for k, v in inputs.items()}
 
     with torch.no_grad():
@@ -131,7 +138,7 @@ def _run_inference(
         outputs,
         threshold=threshold,
         mask_threshold=threshold,
-        target_sizes=[[image.height, image.width]],
+        target_sizes=original_sizes,
     )[0]
 
     masks_list = _convert_to_mask_format(results, image.width, image.height)

@@ -21,7 +21,7 @@ class WorkerSettings(BaseSettings):
     worker_concurrency: int = 2
 
     # SAM3 segmentation model
-    sam3_model_path: str = "facebook/sam3"   # HuggingFace ID or absolute path to local weights
+    sam3_model_path: str = "bodhicitta/sam3"  # HuggingFace ID or absolute path to local weights
     sam3_text_prompt: str = "rock fragment"  # open-vocab prompt for quarry blast muck
     sam3_confidence_threshold: float = 0.5   # post_process_instance_segmentation threshold
 
