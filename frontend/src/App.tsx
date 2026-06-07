@@ -473,19 +473,19 @@ function SitesPage({
 type TransitionAction = "submit" | "approve" | "activate" | "complete";
 
 const NEXT_TRANSITION: Record<string, { action: TransitionAction; label: string }> = {
-  DRAFT: { action: "submit", label: "Подать на проверку" },
-  SUBMITTED: { action: "approve", label: "Утвердить" },
-  APPROVED: { action: "activate", label: "Активировать" },
-  ACTIVE: { action: "complete", label: "Завершить" },
+  draft: { action: "submit", label: "Подать на проверку" },
+  submitted: { action: "approve", label: "Утвердить" },
+  approved: { action: "activate", label: "Активировать" },
+  active: { action: "complete", label: "Завершить" },
 };
 
 const STATUS_BADGE: Record<string, { bg: string; color: string; label: string }> = {
-  DRAFT: { bg: "#eef2f6", color: "var(--muted)", label: "Черновик" },
-  SUBMITTED: { bg: "#fdf0e1", color: "var(--amber)", label: "На проверке" },
-  APPROVED: { bg: "#e8f0fe", color: "var(--blue)", label: "Утверждён" },
-  ACTIVE: { bg: "#e8f5f2", color: "var(--teal)", label: "Активен" },
-  COMPLETED: { bg: "#e7f6ec", color: "var(--green)", label: "Завершён" },
-  SUPERSEDED: { bg: "#eef2f6", color: "var(--muted)", label: "Заменён" },
+  draft: { bg: "#eef2f6", color: "var(--muted)", label: "Черновик" },
+  submitted: { bg: "#fdf0e1", color: "var(--amber)", label: "На проверке" },
+  approved: { bg: "#e8f0fe", color: "var(--blue)", label: "Утверждён" },
+  active: { bg: "#e8f5f2", color: "var(--teal)", label: "Активен" },
+  completed: { bg: "#e7f6ec", color: "var(--green)", label: "Завершён" },
+  superseded: { bg: "#eef2f6", color: "var(--muted)", label: "Заменён" },
 };
 
 // String-typed form state; converted to numbers/nulls before the API call.
@@ -766,7 +766,7 @@ function PassportDetail({
   onClose: () => void;
 }) {
   const next = NEXT_TRANSITION[passport.status];
-  const showBlastSection = passport.status === "APPROVED" || passport.status === "ACTIVE";
+  const showBlastSection = passport.status === "approved" || passport.status === "active";
 
   return (
     <div className="data-panel" style={{ display: "grid", gap: 16 }}>
@@ -822,8 +822,16 @@ function PassportDetail({
           <dd>{passport.hole_depth_m != null ? `${passport.hole_depth_m} м` : "—"}</dd>
         </div>
         <div>
-          <dt>Сетка (ЛНС × расст.)</dt>
-          <dd>{`${passport.burden_m ?? "—"} × ${passport.spacing_m ?? "—"} м`}</dd>
+          <dt>ЛНС, м</dt>
+          <dd>{passport.burden_m != null ? `${passport.burden_m} м` : "—"}</dd>
+        </div>
+        <div>
+          <dt>Расстояние, м</dt>
+          <dd>{passport.spacing_m != null ? `${passport.spacing_m} м` : "—"}</dd>
+        </div>
+        <div>
+          <dt>Забойка, м</dt>
+          <dd>{passport.stemming_m != null ? `${passport.stemming_m} м` : "—"}</dd>
         </div>
         <div>
           <dt>Масса ВВ</dt>
@@ -833,6 +841,18 @@ function PassportDetail({
           <dt>Цель P80</dt>
           <dd>{passport.target_p80_mm != null ? `${passport.target_p80_mm} мм` : "не задан"}</dd>
         </div>
+        {passport.blast_date_planned && (
+          <div>
+            <dt>Плановая дата</dt>
+            <dd>{new Date(passport.blast_date_planned).toLocaleDateString("ru-RU")}</dd>
+          </div>
+        )}
+        {passport.notes && (
+          <div>
+            <dt>Примечания</dt>
+            <dd>{passport.notes}</dd>
+          </div>
+        )}
         <div>
           <dt>Создан</dt>
           <dd>{new Date(passport.created_at).toLocaleDateString("ru-RU")}</dd>
@@ -850,9 +870,9 @@ function PassportDetail({
           >
             {transitioning ? "Выполнение…" : next.label}
           </button>
-        ) : passport.status === "COMPLETED" ? (
+        ) : passport.status === "completed" ? (
           <p style={{ color: "var(--green)", margin: 0 }}>Паспорт завершён</p>
-        ) : passport.status === "SUPERSEDED" ? (
+        ) : passport.status === "superseded" ? (
           <p style={{ color: "var(--muted)", margin: 0 }}>Паспорт заменён</p>
         ) : null}
         {error && <p style={{ color: "var(--rose)", margin: 0 }}>{error}</p>}
@@ -1038,19 +1058,27 @@ function PassportCreateForm({
   selectedQuarryId: string | null;
   onCreated: (p: BlastPassport) => void;
 }) {
-  const [form, setForm] = useState({
+  const emptyForm = {
     site_section_id: "",
+    explosive_type: "",
+    number_of_holes: "",
     hole_diameter_mm: "",
     hole_depth_m: "",
+    burden_m: "",
+    spacing_m: "",
+    stemming_m: "",
     total_explosive_kg: "",
     target_p80_mm: "",
-  });
+    blast_date_planned: "",
+    notes: "",
+  };
+  const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const handleSave = async () => {
     if (!selectedQuarryId || !form.site_section_id) {
-      setSaveError("Выберите карьер и участок");
+      setSaveError("Выберите участок");
       return;
     }
     setSaving(true);
@@ -1058,22 +1086,21 @@ function PassportCreateForm({
     try {
       const body = {
         site_section_id: form.site_section_id,
+        explosive_type: form.explosive_type || null,
+        number_of_holes: form.number_of_holes ? parseInt(form.number_of_holes, 10) : null,
         hole_diameter_mm: form.hole_diameter_mm ? parseFloat(form.hole_diameter_mm) : null,
         hole_depth_m: form.hole_depth_m ? parseFloat(form.hole_depth_m) : null,
-        total_explosive_kg: form.total_explosive_kg
-          ? parseFloat(form.total_explosive_kg)
-          : null,
+        burden_m: form.burden_m ? parseFloat(form.burden_m) : null,
+        spacing_m: form.spacing_m ? parseFloat(form.spacing_m) : null,
+        stemming_m: form.stemming_m ? parseFloat(form.stemming_m) : null,
+        total_explosive_kg: form.total_explosive_kg ? parseFloat(form.total_explosive_kg) : null,
         target_p80_mm: form.target_p80_mm ? parseFloat(form.target_p80_mm) : null,
+        blast_date_planned: form.blast_date_planned || null,
+        notes: form.notes || null,
       };
       const created = await api.passports.create(selectedQuarryId, body);
       onCreated(created);
-      setForm({
-        site_section_id: "",
-        hole_diameter_mm: "",
-        hole_depth_m: "",
-        total_explosive_kg: "",
-        target_p80_mm: "",
-      });
+      setForm(emptyForm);
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : "Ошибка сохранения");
     } finally {
@@ -1115,21 +1142,67 @@ function PassportCreateForm({
         </select>
       </label>
       <label>
+        Тип ВВ
+        <input
+          type="text"
+          value={form.explosive_type}
+          onChange={(e) => setForm((prev) => ({ ...prev, explosive_type: e.target.value }))}
+          placeholder="Гранулит АС-8"
+        />
+      </label>
+      <label>
+        Количество скважин
+        <input
+          type="number"
+          min="1"
+          value={form.number_of_holes}
+          onChange={(e) => setForm((prev) => ({ ...prev, number_of_holes: e.target.value }))}
+          placeholder="24"
+        />
+      </label>
+      <label>
         Диаметр скв., мм
         <input
           type="number"
           value={form.hole_diameter_mm}
           onChange={(e) => setForm((prev) => ({ ...prev, hole_diameter_mm: e.target.value }))}
-          placeholder="215"
+          placeholder="115"
         />
       </label>
       <label>
-        Средняя глубина, м
+        Глубина скв., м
         <input
           type="number"
           value={form.hole_depth_m}
           onChange={(e) => setForm((prev) => ({ ...prev, hole_depth_m: e.target.value }))}
-          placeholder="15.2"
+          placeholder="12.5"
+        />
+      </label>
+      <label>
+        ЛНС, м
+        <input
+          type="number"
+          value={form.burden_m}
+          onChange={(e) => setForm((prev) => ({ ...prev, burden_m: e.target.value }))}
+          placeholder="3.5"
+        />
+      </label>
+      <label>
+        Расстояние, м
+        <input
+          type="number"
+          value={form.spacing_m}
+          onChange={(e) => setForm((prev) => ({ ...prev, spacing_m: e.target.value }))}
+          placeholder="4.0"
+        />
+      </label>
+      <label>
+        Забойка, м
+        <input
+          type="number"
+          value={form.stemming_m}
+          onChange={(e) => setForm((prev) => ({ ...prev, stemming_m: e.target.value }))}
+          placeholder="3.0"
         />
       </label>
       <label>
@@ -1148,6 +1221,23 @@ function PassportCreateForm({
           value={form.target_p80_mm}
           onChange={(e) => setForm((prev) => ({ ...prev, target_p80_mm: e.target.value }))}
           placeholder="300"
+        />
+      </label>
+      <label>
+        Плановая дата взрыва
+        <input
+          type="datetime-local"
+          value={form.blast_date_planned}
+          onChange={(e) => setForm((prev) => ({ ...prev, blast_date_planned: e.target.value }))}
+        />
+      </label>
+      <label style={{ gridColumn: "1 / -1" }}>
+        Примечания
+        <input
+          type="text"
+          value={form.notes}
+          onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
+          placeholder="Дополнительная информация"
         />
       </label>
       {saveError && (

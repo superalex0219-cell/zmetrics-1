@@ -44,8 +44,9 @@ export interface SiteSection {
 export interface BlastPassport {
   id: string;
   site_section_id: string;
-  status: string; // DRAFT | SUBMITTED | APPROVED | ACTIVE | COMPLETED | SUPERSEDED
+  status: string; // draft | submitted | approved | active | completed | superseded
   revision_number: number;
+  blast_date_planned: string | null;
   explosive_type: string | null;
   total_explosive_kg: number | null;
   number_of_holes: number | null;
@@ -53,7 +54,9 @@ export interface BlastPassport {
   hole_depth_m: number | null;
   burden_m: number | null;
   spacing_m: number | null;
+  stemming_m: number | null;
   target_p80_mm: number | null;
+  notes: string | null;
   created_at: string;
   updated_at: string;
 }
