@@ -94,6 +94,7 @@ cd mobile && flutter test
 
 | File | Task | Status |
 |------|------|--------|
+| `2026-06-07-TASK-web2-passport-workflow.md` | WEB-2 passport workflow | **in progress** |
 | `2026-06-07-TASK-worker-m5a-rule-engine.md` | M5-a rule engine | **done** (`4435f28`) |
 | `2026-06-06-TASK-backend-sec2-idor-capture.md` | BACK-SEC-2 IDORs | **done** (`aa4c42f`) |
 | `2026-06-06-TASK-mobile-mob2-pkce.md` | MOB-2 OIDC PKCE | **done** (`796823a`) |
