@@ -1,6 +1,6 @@
 # ZMetrics — Roadmap
 
-Last sync: 2026-06-07 | HEAD: `4435f28`
+Last sync: 2026-06-07 | HEAD: pending WEB-2 commit
 
 ---
 
@@ -67,17 +67,110 @@ Last sync: 2026-06-07 | HEAD: `4435f28`
 - [x] `confidence_notes` auto-populated when `confidence_score < 0.8`
 - [x] 15 unit tests for rule logic
 
+### WEB-2 — Passport workflow in web · `frontend/` (pending commit)
+- [x] Passport detail panel: all fields, colored status badge, click-to-open from list
+- [x] State transitions: DRAFT→SUBMITTED→APPROVED→ACTIVE→COMPLETED (one button per status, one POST each)
+- [x] Blast event registration form (APPROVED/ACTIVE only; `blast_datetime` required)
+- [x] AuditLog display (hidden silently on 403; hidden when empty)
+- [x] `Promise.allSettled` — 404 blast event and 403 audit log are silent, never shown as errors
+- [x] `onUpdated` prop wired: status changes reflected immediately in passport list
+- [x] `tsc --noEmit` — 0 errors
+
+---
+
+## QA & USER TESTING
+
+User testing is done by the product owner directly in the browser UI.
+Bug hunts are periodic code-review tasks run by an executor agent (no UI needed).
+
+---
+
+### UT-1 — Web UI smoke test · browser @ http://localhost:5173
+*Run after Docker rebuild following WEB-2.*
+
+**Pre-condition:** `docker compose -f infra\docker-compose.yml up -d` + `ENABLE_DEV_SEED=true` seed ran.
+
+- [ ] Войти через Keycloak → имя пользователя появилось в топбаре
+- [ ] Dashboard: карточки карьеров/участков/отчётов показывают числа (не "—")
+- [ ] Карьеры: карточки с названиями и локацией
+- [ ] Участки: выбор карьера → список участков обновляется
+- [ ] Паспорта — список: строки кликабельны; выбранная строка подсвечена
+- [ ] Паспорта — деталь: поля заполнены (статус, ревизия, скважины, цель P80)
+- [ ] Паспорта — переход DRAFT → SUBMITTED: нажать "Подать на проверку" → статус обновился в списке и детали
+- [ ] Паспорта — переход SUBMITTED → APPROVED (от admin-пользователя): кнопка "Утвердить" → APPROVED
+- [ ] Паспорта — APPROVED: видна кнопка "Зарегистрировать взрыв"
+- [ ] Взрыв: заполнить дату → "Зарегистрировать" → форма скрылась, данные взрыва показаны
+- [ ] Взрыв: кнопка "Зарегистрировать" без даты — ничего не происходит
+- [ ] "← К списку" — деталь закрылась
+- [ ] Отчёты: кнопка "JSON" скачивает файл; кнопка "Рекомендации" → переход на экран рекомендаций
+- [ ] Рекомендации: `parameter_suggestions` отображаются как read-only (заголовок "Справочные параметры")
+- [ ] Рекомендации: кнопки "Принять / Отклонить / Ознакомлен" работают (статус меняется)
+- [ ] Выйти: кнопка Выйти → редирект на Keycloak login
+
+---
+
+### UT-2 — Rule engine E2E · browser + API
+*Verify M5-a output is visible in the web UI.*
+
+**Pre-condition:** UT-1 прошёл. Паспорт с `target_p80_mm = 500` существует в БД.
+
+- [ ] Запустить анализ через мобильное приложение (или через dev-seed)
+- [ ] Открыть Отчёты → найти последний отчёт → открыть Рекомендации
+- [ ] Текст рекомендации содержит "⚠ Синтетические данные"
+- [ ] Если P80 > 550 мм: текст содержит "КРУПНЫЙ КЛАСС"
+- [ ] Если `fines_percent > 15%`: текст содержит "ПЕРЕИЗМЕЛЬЧЕНИЕ"
+- [ ] Блок "Справочные параметры" показывает `observed_p80_mm`, `target_p80_mm`, `deviation_pct`
+- [ ] Статус рекомендации = "требует проверки" (не принято автоматически)
+
+---
+
+### UT-3 — Mobile smoke test · Android device / emulator
+*Run after rebuilding the app. Matches M4 acceptance criteria.*
+
+- [ ] Войти через PKCE (Keycloak login в браузере) → вернуться в приложение авторизованным
+- [ ] Список карьеров загружается
+- [ ] Создать паспорт → статус DRAFT
+- [ ] Подать паспорт → SUBMITTED
+- [ ] Запустить capture flow: выбрать device + calibration → идёт polling → переход на отчёт
+- [ ] Отчёт: P10/P50/P80 показаны, mock badge "⚠ Синтетические данные" виден
+- [ ] Кнопка Export → Android share sheet открылся
+
 ---
 
 ## BACKLOG
 
-### WEB-2 — Passport workflow in web · `frontend/`
-*Web currently has passport list + basic create. Missing the full workflow.*
+### BUG-HUNT-1 — Frontend error states & edge cases · `frontend/`
+*Periodic. Run whenever ≥2 new frontend features land. No UI access needed — code review only.*
 
-- [ ] Passport detail view (all fields, status chip, revision history)
-- [ ] State transitions: DRAFT → SUBMITTED → APPROVED (human buttons, same safety rules as mobile)
-- [ ] Blast event creation form under passport detail
-- [ ] AuditLog display on passport detail (admin/blaster only)
+- [ ] Empty states: каждый список имеет fallback (нет данных / не вошли)
+- [ ] Loading states: не мигают, нет двойного fetch
+- [ ] Network error: fetch в `useEffect` не проглатывает ошибки молча (`.catch(console.error)` — минимум)
+- [ ] `Promise.allSettled` usage: все блоки используют `allSettled` там, где 404/403 ожидаемы
+- [ ] Типизация: `tsc --noEmit` чистый, нет `as unknown as X`
+- [ ] `parameter_suggestions` — проверить что нет кода, записывающего значения обратно в паспорт
+- [ ] Audit log: проверить что нет кнопки "удалить запись"
+
+### BUG-HUNT-2 — Backend security & data integrity · `backend/`
+*Periodic. Run whenever ≥2 новых endpoint-а добавлено. Read-only code review.*
+
+- [ ] IDOR: каждый endpoint, принимающий UUID ресурса, проверяет принадлежность карьеру
+- [ ] Все `/api/v1/` пути имеют `Depends(get_current_user)` или `require_quarry_role`
+- [ ] Нет `text()` с f-string в SQLAlchemy запросах
+- [ ] Нет `allow_origins=["*"]` в CORS конфигурации
+- [ ] AuditLog: нет `DELETE` или `UPDATE` на таблице `audit_log`
+- [ ] `Recommendation` creation: нет пути создания без `REQUIRES_HUMAN_REVIEW`
+- [ ] MinIO keys: конструируются только server-side, не из user input напрямую
+- [ ] Presigned URL expires: не больше 3600 секунд
+
+### BUG-HUNT-3 — Worker pipeline integrity · `worker/`
+*Periodic. Run после каждого изменения worker/.*
+
+- [ ] `evaluate_fragmentation` — нет импортов SQLAlchemy/Celery/asyncio в `rules.py`
+- [ ] `db_models.py` стабы в синхронизированы с `backend/app/db/models/` (ключевые поля)
+- [ ] Провальный pipeline шаг → `AnalysisJob.status = "failed"`, нет частичного `AnalysisResult`
+- [ ] `confidence_notes` аппенд, не перезапись (сохраняется mock-note)
+- [ ] `parameter_suggestions` нигде не читается и не записывается в `BlastPassport`
+- [ ] `asyncio.set_event_loop_policy` присутствует для Windows в Celery task
 
 ### M5-b — LLM explanation layer · `worker/` or `backend/`
 *Depends on M5-a rules being stable. Adds human-readable text to structured suggestions.*

@@ -21,7 +21,9 @@ import {
 import { api, checkBackend, downloadWithAuth, kc } from "./api";
 import type {
   AnalysisResult,
+  AuditLogEntry,
   AuthUser,
+  BlastEvent,
   BlastPassport,
   Fraction,
   NavItem,
@@ -189,6 +191,7 @@ export default function App() {
             onSelectQuarry={setSelectedQuarryId}
             passports={passports}
             onCreated={(p) => setPassports((prev) => [p, ...prev])}
+            onUpdated={(p) => setPassports((prev) => prev.map((x) => (x.id === p.id ? p : x)))}
           />
         )}
         {active === "analyses" && <AnalysesPage />}
@@ -451,6 +454,47 @@ function SitesPage({
 // Passports
 // ---------------------------------------------------------------------------
 
+// The single transition each status allows. Statuses absent from this map
+// (COMPLETED, SUPERSEDED) are terminal — no button is rendered. One click maps to
+// exactly one POST; there is no chaining and no automatic progression.
+type TransitionAction = "submit" | "approve" | "activate" | "complete";
+
+const NEXT_TRANSITION: Record<string, { action: TransitionAction; label: string }> = {
+  DRAFT: { action: "submit", label: "Подать на проверку" },
+  SUBMITTED: { action: "approve", label: "Утвердить" },
+  APPROVED: { action: "activate", label: "Активировать" },
+  ACTIVE: { action: "complete", label: "Завершить" },
+};
+
+const STATUS_BADGE: Record<string, { bg: string; color: string; label: string }> = {
+  DRAFT: { bg: "#eef2f6", color: "var(--muted)", label: "Черновик" },
+  SUBMITTED: { bg: "#fdf0e1", color: "var(--amber)", label: "На проверке" },
+  APPROVED: { bg: "#e8f0fe", color: "var(--blue)", label: "Утверждён" },
+  ACTIVE: { bg: "#e8f5f2", color: "var(--teal)", label: "Активен" },
+  COMPLETED: { bg: "#e7f6ec", color: "var(--green)", label: "Завершён" },
+  SUPERSEDED: { bg: "#eef2f6", color: "var(--muted)", label: "Заменён" },
+};
+
+// String-typed form state; converted to numbers/nulls before the API call.
+type BlastEventFormData = {
+  blast_datetime: string;
+  actual_explosive_kg: string;
+  weather_conditions: string;
+  notes: string;
+};
+
+// The blast-event inputs sit outside `.form-panel`, so they don't inherit its
+// field styling — apply the same look inline to stay consistent.
+const detailFieldStyle: CSSProperties = {
+  minHeight: 42,
+  border: "1px solid var(--line)",
+  borderRadius: 8,
+  padding: "0 12px",
+  color: "var(--ink)",
+  background: "white",
+  font: "inherit",
+};
+
 function PassportsPage({
   quarries,
   sections,
@@ -458,12 +502,527 @@ function PassportsPage({
   onSelectQuarry,
   passports,
   onCreated,
+  onUpdated,
 }: {
   quarries: Quarry[];
   sections: SiteSection[];
   selectedQuarryId: string | null;
   onSelectQuarry: (id: string) => void;
   passports: BlastPassport[];
+  onCreated: (p: BlastPassport) => void;
+  onUpdated: (p: BlastPassport) => void;
+}) {
+  const [showCreate, setShowCreate] = useState(false);
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<BlastPassport | null>(null);
+  const [blastEvent, setBlastEvent] = useState<BlastEvent | null>(null);
+  const [auditLog, setAuditLog] = useState<AuditLogEntry[]>([]);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [transitioning, setTransitioning] = useState(false);
+  const [showBlastEventForm, setShowBlastEventForm] = useState(false);
+
+  const handleSelectPassport = async (passport: BlastPassport) => {
+    if (!selectedQuarryId) return;
+    setShowCreate(false);
+    setDetailId(passport.id);
+    setDetailLoading(true);
+    setDetailError(null);
+    setDetail(null);
+    setBlastEvent(null);
+    setAuditLog([]);
+    setShowBlastEventForm(false);
+
+    // allSettled: a missing blast event (404) and a forbidden audit log (403) are
+    // expected outcomes — they must not surface as a load failure.
+    const [fullPassport, eventResult, auditResult] = await Promise.allSettled([
+      api.passports.get(selectedQuarryId, passport.id),
+      api.blastEvents.get(selectedQuarryId, passport.id),
+      api.auditLogs.forPassport(passport.id),
+    ]);
+
+    if (fullPassport.status === "fulfilled") {
+      setDetail(fullPassport.value);
+    } else {
+      // Only the passport fetch failing is a real error worth showing.
+      setDetailError(
+        fullPassport.reason instanceof Error
+          ? fullPassport.reason.message
+          : "Ошибка загрузки паспорта",
+      );
+    }
+    if (eventResult.status === "fulfilled") {
+      setBlastEvent(eventResult.value); // 404 → stays null (no blast event yet)
+    }
+    if (auditResult.status === "fulfilled") {
+      setAuditLog(auditResult.value); // 403 → stays [] (caller is not an admin)
+    }
+    setDetailLoading(false);
+  };
+
+  const handleTransition = async (action: TransitionAction) => {
+    if (!detail || !selectedQuarryId) return;
+    setTransitioning(true);
+    setDetailError(null);
+    try {
+      const updated = await api.passports[action](selectedQuarryId, detail.id);
+      setDetail(updated);
+      onUpdated(updated);
+    } catch (err) {
+      setDetailError(err instanceof Error ? err.message : `Ошибка: ${action}`);
+    } finally {
+      setTransitioning(false);
+    }
+  };
+
+  const handleCreateBlastEvent = async (form: BlastEventFormData) => {
+    if (!detail || !selectedQuarryId) return;
+    if (!form.blast_datetime) return; // required — never POST without a datetime
+    setTransitioning(true);
+    setDetailError(null);
+    try {
+      const event = await api.blastEvents.create(selectedQuarryId, detail.id, {
+        blast_datetime: form.blast_datetime,
+        actual_explosive_kg: form.actual_explosive_kg
+          ? parseFloat(form.actual_explosive_kg)
+          : null,
+        weather_conditions: form.weather_conditions || null,
+        notes: form.notes || null,
+      });
+      setBlastEvent(event);
+      setShowBlastEventForm(false);
+    } catch (err) {
+      setDetailError(err instanceof Error ? err.message : "Ошибка создания взрыва");
+    } finally {
+      setTransitioning(false);
+    }
+  };
+
+  const openCreate = () => {
+    setShowCreate(true);
+    setDetailId(null);
+    setDetail(null);
+  };
+
+  const closeDetail = () => {
+    setDetailId(null);
+    setDetail(null);
+  };
+
+  return (
+    <section className="content-grid two">
+      <div className="data-panel">
+        <PanelTitle icon={ClipboardList} title="Паспорта БВР" />
+        <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
+          <QuarrySelect
+            quarries={quarries}
+            value={selectedQuarryId}
+            onChange={onSelectQuarry}
+            style={{ flex: 1 }}
+          />
+          <button type="button" onClick={openCreate} title="Создать паспорт">
+            <ClipboardList aria-hidden="true" />
+            Создать
+          </button>
+        </div>
+        <div className="passport-list">
+          {passports.map((passport) => (
+            <article
+              className={`passport-row ${detailId === passport.id ? "selected" : ""}`}
+              key={passport.id}
+              onClick={() => void handleSelectPassport(passport)}
+              style={{
+                cursor: "pointer",
+                borderColor: detailId === passport.id ? "var(--teal)" : undefined,
+                background: detailId === passport.id ? "var(--surface-2)" : undefined,
+              }}
+            >
+              <div>
+                <strong>#{passport.id.slice(-8)}</strong>
+                <PassportStatusBadge status={passport.status} />
+              </div>
+              <span>
+                {passport.hole_diameter_mm != null ? `${passport.hole_diameter_mm} мм` : "—"}
+              </span>
+              <span>
+                {passport.number_of_holes != null ? `${passport.number_of_holes} скв.` : "—"}
+              </span>
+              <span>
+                {passport.total_explosive_kg != null
+                  ? `${passport.total_explosive_kg} кг`
+                  : "—"}
+              </span>
+            </article>
+          ))}
+          {passports.length === 0 && (
+            <p style={{ color: "var(--muted)", margin: 0 }}>Нет паспортов для выбранного карьера</p>
+          )}
+        </div>
+      </div>
+
+      {detailId !== null ? (
+        detailLoading && !detail ? (
+          <div className="data-panel">
+            <p style={{ color: "var(--muted)", margin: 0 }}>Загрузка…</p>
+          </div>
+        ) : detail ? (
+          <PassportDetail
+            passport={detail}
+            blastEvent={blastEvent}
+            auditLog={auditLog}
+            loading={detailLoading}
+            error={detailError}
+            transitioning={transitioning}
+            showBlastEventForm={showBlastEventForm}
+            onTransition={handleTransition}
+            onShowBlastEventForm={() => setShowBlastEventForm(true)}
+            onHideBlastEventForm={() => setShowBlastEventForm(false)}
+            onCreateBlastEvent={handleCreateBlastEvent}
+            onClose={closeDetail}
+          />
+        ) : (
+          <div className="data-panel" style={{ display: "grid", gap: 12, alignContent: "start" }}>
+            <button type="button" onClick={closeDetail} style={{ justifySelf: "start" }}>
+              ← К списку
+            </button>
+            <p style={{ color: "var(--rose)", margin: 0 }}>
+              {detailError ?? "Не удалось загрузить паспорт"}
+            </p>
+          </div>
+        )
+      ) : showCreate ? (
+        <PassportCreateForm
+          sections={sections}
+          selectedQuarryId={selectedQuarryId}
+          onCreated={onCreated}
+        />
+      ) : (
+        <div className="data-panel" style={{ display: "grid", gap: 14, alignContent: "start" }}>
+          <p style={{ color: "var(--muted)", margin: 0 }}>
+            Выберите паспорт из списка или создайте новый.
+          </p>
+          <button
+            className="primary"
+            type="button"
+            onClick={openCreate}
+            style={{ justifySelf: "start" }}
+          >
+            <ClipboardList aria-hidden="true" />
+            Создать паспорт
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function PassportStatusBadge({ status }: { status: string }) {
+  const cfg = STATUS_BADGE[status] ?? { bg: "#eef2f6", color: "var(--muted)", label: status };
+  return (
+    <span className="status-pill" style={{ background: cfg.bg, color: cfg.color }}>
+      {cfg.label}
+    </span>
+  );
+}
+
+function PassportDetail({
+  passport,
+  blastEvent,
+  auditLog,
+  loading,
+  error,
+  transitioning,
+  showBlastEventForm,
+  onTransition,
+  onShowBlastEventForm,
+  onHideBlastEventForm,
+  onCreateBlastEvent,
+  onClose,
+}: {
+  passport: BlastPassport;
+  blastEvent: BlastEvent | null;
+  auditLog: AuditLogEntry[];
+  loading: boolean;
+  error: string | null;
+  transitioning: boolean;
+  showBlastEventForm: boolean;
+  onTransition: (action: TransitionAction) => void;
+  onShowBlastEventForm: () => void;
+  onHideBlastEventForm: () => void;
+  onCreateBlastEvent: (form: BlastEventFormData) => void;
+  onClose: () => void;
+}) {
+  const next = NEXT_TRANSITION[passport.status];
+  const showBlastSection = passport.status === "APPROVED" || passport.status === "ACTIVE";
+
+  return (
+    <div className="data-panel" style={{ display: "grid", gap: 16 }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 10,
+        }}
+      >
+        <button type="button" onClick={onClose}>
+          ← К списку
+        </button>
+        {loading && (
+          <span style={{ color: "var(--muted)", fontSize: "0.85rem" }}>Обновление…</span>
+        )}
+      </div>
+
+      <PanelTitle icon={ClipboardList} title={`Паспорт #${passport.id.slice(-8)}`} />
+
+      <dl>
+        <div>
+          <dt>Статус</dt>
+          <dd>
+            <PassportStatusBadge status={passport.status} />
+          </dd>
+        </div>
+        <div>
+          <dt>Ревизия</dt>
+          <dd>{passport.revision_number}</dd>
+        </div>
+        <div>
+          <dt>Участок</dt>
+          <dd style={{ fontFamily: "monospace", fontSize: "0.85em" }}>
+            {passport.site_section_id.slice(-8)}
+          </dd>
+        </div>
+        <div>
+          <dt>Тип ВВ</dt>
+          <dd>{passport.explosive_type ?? "—"}</dd>
+        </div>
+        <div>
+          <dt>Количество скважин</dt>
+          <dd>{passport.number_of_holes ?? "—"}</dd>
+        </div>
+        <div>
+          <dt>Диаметр скв.</dt>
+          <dd>{passport.hole_diameter_mm != null ? `${passport.hole_diameter_mm} мм` : "—"}</dd>
+        </div>
+        <div>
+          <dt>Глубина скв.</dt>
+          <dd>{passport.hole_depth_m != null ? `${passport.hole_depth_m} м` : "—"}</dd>
+        </div>
+        <div>
+          <dt>Сетка (ЛНС × расст.)</dt>
+          <dd>{`${passport.burden_m ?? "—"} × ${passport.spacing_m ?? "—"} м`}</dd>
+        </div>
+        <div>
+          <dt>Масса ВВ</dt>
+          <dd>{passport.total_explosive_kg != null ? `${passport.total_explosive_kg} кг` : "—"}</dd>
+        </div>
+        <div>
+          <dt>Цель P80</dt>
+          <dd>{passport.target_p80_mm != null ? `${passport.target_p80_mm} мм` : "не задан"}</dd>
+        </div>
+        <div>
+          <dt>Создан</dt>
+          <dd>{new Date(passport.created_at).toLocaleDateString("ru-RU")}</dd>
+        </div>
+      </dl>
+
+      <div style={{ display: "grid", gap: 10 }}>
+        {next ? (
+          <button
+            className="primary"
+            type="button"
+            disabled={transitioning}
+            onClick={() => onTransition(next.action)}
+            style={{ justifySelf: "start" }}
+          >
+            {transitioning ? "Выполнение…" : next.label}
+          </button>
+        ) : passport.status === "COMPLETED" ? (
+          <p style={{ color: "var(--green)", margin: 0 }}>Паспорт завершён</p>
+        ) : passport.status === "SUPERSEDED" ? (
+          <p style={{ color: "var(--muted)", margin: 0 }}>Паспорт заменён</p>
+        ) : null}
+        {error && <p style={{ color: "var(--rose)", margin: 0 }}>{error}</p>}
+      </div>
+
+      {showBlastSection && (
+        <div
+          style={{
+            borderTop: "1px solid var(--line)",
+            paddingTop: 14,
+            display: "grid",
+            gap: 12,
+          }}
+        >
+          {blastEvent ? (
+            <>
+              <div className="panel-title" style={{ marginBottom: 0 }}>
+                <Activity aria-hidden="true" />
+                <h2>Взрыв проведён</h2>
+              </div>
+              <dl>
+                <div>
+                  <dt>Дата/время</dt>
+                  <dd>{new Date(blastEvent.blast_datetime).toLocaleString("ru-RU")}</dd>
+                </div>
+                <div>
+                  <dt>Фактич. ВВ</dt>
+                  <dd>
+                    {blastEvent.actual_explosive_kg != null
+                      ? `${blastEvent.actual_explosive_kg} кг`
+                      : "—"}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Погода</dt>
+                  <dd>{blastEvent.weather_conditions ?? "—"}</dd>
+                </div>
+                <div>
+                  <dt>Заметки</dt>
+                  <dd>{blastEvent.notes ?? "—"}</dd>
+                </div>
+              </dl>
+            </>
+          ) : showBlastEventForm ? (
+            <BlastEventForm
+              transitioning={transitioning}
+              onSubmit={onCreateBlastEvent}
+              onCancel={onHideBlastEventForm}
+            />
+          ) : (
+            <button type="button" onClick={onShowBlastEventForm} style={{ justifySelf: "start" }}>
+              <Activity aria-hidden="true" />
+              Зарегистрировать взрыв
+            </button>
+          )}
+        </div>
+      )}
+
+      {auditLog.length > 0 && (
+        <div
+          style={{
+            borderTop: "1px solid var(--line)",
+            paddingTop: 14,
+            display: "grid",
+            gap: 12,
+          }}
+        >
+          <div className="panel-title" style={{ marginBottom: 0 }}>
+            <Settings aria-hidden="true" />
+            <h2>История изменений</h2>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Дата</th>
+                  <th>Действие</th>
+                  <th>Было</th>
+                  <th>Стало</th>
+                </tr>
+              </thead>
+              <tbody>
+                {auditLog.map((entry) => (
+                  <tr key={entry.id}>
+                    <td>{new Date(entry.occurred_at).toLocaleString("ru-RU")}</td>
+                    <td>{entry.action}</td>
+                    <td>{entry.old_value ? JSON.stringify(entry.old_value) : "—"}</td>
+                    <td>{entry.new_value ? JSON.stringify(entry.new_value) : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BlastEventForm({
+  transitioning,
+  onSubmit,
+  onCancel,
+}: {
+  transitioning: boolean;
+  onSubmit: (form: BlastEventFormData) => void;
+  onCancel: () => void;
+}) {
+  const [form, setForm] = useState<BlastEventFormData>({
+    blast_datetime: "",
+    actual_explosive_kg: "",
+    weather_conditions: "",
+    notes: "",
+  });
+
+  return (
+    <form
+      style={{ display: "grid", gap: 12 }}
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!form.blast_datetime) return; // required — guard before POST
+        onSubmit(form);
+      }}
+    >
+      <label style={{ display: "grid", gap: 6, color: "var(--muted)" }}>
+        Дата и время взрыва *
+        <input
+          type="datetime-local"
+          required
+          value={form.blast_datetime}
+          onChange={(e) => setForm((prev) => ({ ...prev, blast_datetime: e.target.value }))}
+          style={detailFieldStyle}
+        />
+      </label>
+      <label style={{ display: "grid", gap: 6, color: "var(--muted)" }}>
+        Фактическая масса ВВ, кг
+        <input
+          type="number"
+          value={form.actual_explosive_kg}
+          onChange={(e) => setForm((prev) => ({ ...prev, actual_explosive_kg: e.target.value }))}
+          placeholder="2380"
+          style={detailFieldStyle}
+        />
+      </label>
+      <label style={{ display: "grid", gap: 6, color: "var(--muted)" }}>
+        Погодные условия
+        <input
+          type="text"
+          value={form.weather_conditions}
+          onChange={(e) => setForm((prev) => ({ ...prev, weather_conditions: e.target.value }))}
+          placeholder="Ясно, +18°C, ветер 3 м/с"
+          style={detailFieldStyle}
+        />
+      </label>
+      <label style={{ display: "grid", gap: 6, color: "var(--muted)" }}>
+        Заметки
+        <textarea
+          value={form.notes}
+          onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
+          rows={3}
+          style={{ ...detailFieldStyle, minHeight: 70, padding: "10px 12px" }}
+        />
+      </label>
+      <div style={{ display: "flex", gap: 10 }}>
+        <button className="primary" type="submit" disabled={transitioning}>
+          <Activity aria-hidden="true" />
+          {transitioning ? "Сохранение…" : "Зарегистрировать"}
+        </button>
+        <button type="button" onClick={onCancel} disabled={transitioning}>
+          Отмена
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function PassportCreateForm({
+  sections,
+  selectedQuarryId,
+  onCreated,
+}: {
+  sections: SiteSection[];
+  selectedQuarryId: string | null;
   onCreated: (p: BlastPassport) => void;
 }) {
   const [form, setForm] = useState({
@@ -510,131 +1069,82 @@ function PassportsPage({
   };
 
   return (
-    <section className="content-grid two">
-      <div className="data-panel">
-        <PanelTitle icon={ClipboardList} title="Паспорта БВР" />
-        <div style={{ marginBottom: 12 }}>
-          <QuarrySelect
-            quarries={quarries}
-            value={selectedQuarryId}
-            onChange={onSelectQuarry}
-            style={{ width: "100%" }}
-          />
-        </div>
-        <div className="passport-list">
-          {passports.map((passport) => (
-            <article className="passport-row" key={passport.id}>
-              <div>
-                <strong>#{passport.id.slice(-8)}</strong>
-                <span className="status-pill">{passport.status}</span>
-              </div>
-              <span>
-                {passport.hole_diameter_mm != null ? `${passport.hole_diameter_mm} мм` : "—"}
-              </span>
-              <span>
-                {passport.number_of_holes != null ? `${passport.number_of_holes} скв.` : "—"}
-              </span>
-              <span>
-                {passport.total_explosive_kg != null
-                  ? `${passport.total_explosive_kg} кг`
-                  : "—"}
-              </span>
-            </article>
-          ))}
-          {passports.length === 0 && (
-            <p style={{ color: "var(--muted)", margin: 0 }}>Нет паспортов для выбранного карьера</p>
-          )}
-        </div>
-      </div>
-
-      <form
-        className="form-panel compact"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void handleSave();
-        }}
-      >
-        <label style={{ gridColumn: "1 / -1" }}>
-          Участок
-          <select
-            value={form.site_section_id}
-            onChange={(e) => setForm((prev) => ({ ...prev, site_section_id: e.target.value }))}
-            style={{
-              minHeight: 42,
-              border: "1px solid var(--line)",
-              borderRadius: 8,
-              padding: "0 12px",
-              color: "var(--ink)",
-              background: "white",
-            }}
-          >
-            <option value="" disabled>
-              Выберите участок
-            </option>
-            {sections.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-                {s.block_number ? ` (${s.block_number})` : ""}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Диаметр скв., мм
-          <input
-            type="number"
-            value={form.hole_diameter_mm}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, hole_diameter_mm: e.target.value }))
-            }
-            placeholder="215"
-          />
-        </label>
-        <label>
-          Средняя глубина, м
-          <input
-            type="number"
-            value={form.hole_depth_m}
-            onChange={(e) => setForm((prev) => ({ ...prev, hole_depth_m: e.target.value }))}
-            placeholder="15.2"
-          />
-        </label>
-        <label>
-          Масса ВВ, кг
-          <input
-            type="number"
-            value={form.total_explosive_kg}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, total_explosive_kg: e.target.value }))
-            }
-            placeholder="4360"
-          />
-        </label>
-        <label>
-          Цель P80, мм
-          <input
-            type="number"
-            value={form.target_p80_mm}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, target_p80_mm: e.target.value }))
-            }
-            placeholder="300"
-          />
-        </label>
-        {saveError && (
-          <p style={{ color: "var(--rose)", margin: 0, gridColumn: "1 / -1" }}>{saveError}</p>
-        )}
-        <button
-          className="primary"
-          type="submit"
-          disabled={saving}
-          style={{ gridColumn: "1 / -1" }}
+    <form
+      className="form-panel compact"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void handleSave();
+      }}
+    >
+      <label style={{ gridColumn: "1 / -1" }}>
+        Участок
+        <select
+          value={form.site_section_id}
+          onChange={(e) => setForm((prev) => ({ ...prev, site_section_id: e.target.value }))}
+          style={{
+            minHeight: 42,
+            border: "1px solid var(--line)",
+            borderRadius: 8,
+            padding: "0 12px",
+            color: "var(--ink)",
+            background: "white",
+          }}
         >
-          <ClipboardList aria-hidden="true" />
-          {saving ? "Сохранение..." : "Сохранить"}
-        </button>
-      </form>
-    </section>
+          <option value="" disabled>
+            Выберите участок
+          </option>
+          {sections.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+              {s.block_number ? ` (${s.block_number})` : ""}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Диаметр скв., мм
+        <input
+          type="number"
+          value={form.hole_diameter_mm}
+          onChange={(e) => setForm((prev) => ({ ...prev, hole_diameter_mm: e.target.value }))}
+          placeholder="215"
+        />
+      </label>
+      <label>
+        Средняя глубина, м
+        <input
+          type="number"
+          value={form.hole_depth_m}
+          onChange={(e) => setForm((prev) => ({ ...prev, hole_depth_m: e.target.value }))}
+          placeholder="15.2"
+        />
+      </label>
+      <label>
+        Масса ВВ, кг
+        <input
+          type="number"
+          value={form.total_explosive_kg}
+          onChange={(e) => setForm((prev) => ({ ...prev, total_explosive_kg: e.target.value }))}
+          placeholder="4360"
+        />
+      </label>
+      <label>
+        Цель P80, мм
+        <input
+          type="number"
+          value={form.target_p80_mm}
+          onChange={(e) => setForm((prev) => ({ ...prev, target_p80_mm: e.target.value }))}
+          placeholder="300"
+        />
+      </label>
+      {saveError && (
+        <p style={{ color: "var(--rose)", margin: 0, gridColumn: "1 / -1" }}>{saveError}</p>
+      )}
+      <button className="primary" type="submit" disabled={saving} style={{ gridColumn: "1 / -1" }}>
+        <ClipboardList aria-hidden="true" />
+        {saving ? "Сохранение..." : "Сохранить"}
+      </button>
+    </form>
   );
 }
 

@@ -1,7 +1,7 @@
 # ZMetrics — STATUS
 
 **Last updated:** 2026-06-07 (curating chat)
-**Git HEAD:** `4435f28` — M5-a rule engine done
+**Git HEAD:** pending WEB-2 commit
 
 ---
 
@@ -24,7 +24,7 @@
 |-------|-------|-------|
 | **backend** | M1 + SEC-1 + BACK-SEC-2 complete | 53 tests. All IDOR gaps closed. AuditLog complete for role_assigned. Magic-byte validation on artifact upload. |
 | **worker** | M1 + M5-a rule engine | 7 mock steps + rule engine. `evaluate_fragmentation` flags oversize/fines vs passport target_p80_mm. `parameter_suggestions` JSONB populated. `db_models.py` hand-synced — SYNC risk (M6+). |
-| **frontend** | WEB-1 complete | React + Vite + Keycloak OIDC. 7 screens wired to real API. Mock badge, read-only parameter_suggestions, review buttons. Dockerised. |
+| **frontend** | WEB-1 + WEB-2 complete | React + Vite + Keycloak OIDC. Passport detail panel, status transitions, blast event form, audit log. `tsc --noEmit` clean. |
 | **mobile** | M1 + MOB-1/2/3/4 + MOB-DESIGN | 63 tests. Teal theme + dark AppBar. Russian labels. StatCard widget. |
 | **infra** | stale image | Needs `docker compose build backend` to pick up SEC-1 batch + GAP-1/2 changes. |
 
@@ -45,6 +45,7 @@
 | `09ca465` | WEB-1: React frontend wired to backend; Keycloak OIDC; 7 screens live |
 | `ebb28e5` | MOB-DESIGN: teal theme + dark AppBar + Russian labels + StatCard |
 | `4435f28` | M5-a: rule engine — evaluate_fragmentation; BlastEvent/BlastPassport stubs; 15 new tests |
+| pending | WEB-2: passport detail panel, status transitions, blast event form, audit log |
 
 ---
 
@@ -52,7 +53,9 @@
 
 | Pri | ID | Item | Layer | Spec |
 |-----|----|------|-------|------|
-| **P2** | WEB-2 | Passport workflow in web: detail view, state transitions, blast event form | frontend | not yet written |
+| **P2** | UT-1 | User smoke test: web UI после WEB-2 (паспорта, взрыв, рекомендации) | browser | checklist в roadmap |
+| P3 | BUG-HUNT-1 | Frontend error states & edge cases review | frontend | checklist в roadmap |
+| P3 | M5-b | LLM explanation layer for recommendations (Claude API) | worker | depends M5-a |
 | P3 | M5-b | LLM explanation layer for recommendations (Claude API) | worker | depends M5-a |
 | later | — | OIDC deactivation sync, PDF reports, per-section RBAC | multi | M2+ |
 
@@ -94,7 +97,7 @@ cd mobile && flutter test
 
 | File | Task | Status |
 |------|------|--------|
-| `2026-06-07-TASK-web2-passport-workflow.md` | WEB-2 passport workflow | **in progress** |
+| `2026-06-07-TASK-web2-passport-workflow.md` | WEB-2 passport workflow | **done** (pending commit) |
 | `2026-06-07-TASK-worker-m5a-rule-engine.md` | M5-a rule engine | **done** (`4435f28`) |
 | `2026-06-06-TASK-backend-sec2-idor-capture.md` | BACK-SEC-2 IDORs | **done** (`aa4c42f`) |
 | `2026-06-06-TASK-mobile-mob2-pkce.md` | MOB-2 OIDC PKCE | **done** (`796823a`) |

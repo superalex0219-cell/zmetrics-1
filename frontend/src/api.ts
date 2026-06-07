@@ -2,6 +2,8 @@ import Keycloak from "keycloak-js";
 
 import type {
   AnalysisResult,
+  AuditLogEntry,
+  BlastEvent,
   BlastPassport,
   Paginated,
   Quarry,
@@ -91,6 +93,38 @@ export const api = {
       get<Paginated<BlastPassport>>(`/quarries/${quarryId}/passports`).then((p) => p.items),
     create: (quarryId: string, body: Partial<BlastPassport> & { site_section_id: string }) =>
       post<BlastPassport>(`/quarries/${quarryId}/passports`, body),
+    get: (quarryId: string, passportId: string) =>
+      get<BlastPassport>(`/quarries/${quarryId}/passports/${passportId}`),
+    submit: (quarryId: string, passportId: string) =>
+      post<BlastPassport>(`/quarries/${quarryId}/passports/${passportId}/submit`, {}),
+    approve: (quarryId: string, passportId: string) =>
+      post<BlastPassport>(`/quarries/${quarryId}/passports/${passportId}/approve`, {}),
+    activate: (quarryId: string, passportId: string) =>
+      post<BlastPassport>(`/quarries/${quarryId}/passports/${passportId}/activate`, {}),
+    complete: (quarryId: string, passportId: string) =>
+      post<BlastPassport>(`/quarries/${quarryId}/passports/${passportId}/complete`, {}),
+  },
+  blastEvents: {
+    get: (quarryId: string, passportId: string) =>
+      get<BlastEvent>(`/quarries/${quarryId}/passports/${passportId}/blast-event`),
+    create: (
+      quarryId: string,
+      passportId: string,
+      body: {
+        blast_datetime: string;
+        actual_explosive_kg?: number | null;
+        weather_conditions?: string | null;
+        notes?: string | null;
+      },
+    ) => post<BlastEvent>(`/quarries/${quarryId}/passports/${passportId}/blast-event`, body),
+  },
+  auditLogs: {
+    // Fetches all blast_passport audit entries and filters to one passport client-side.
+    // Throws on 403 (non-admin) — callers must catch and treat as an empty list.
+    forPassport: async (passportId: string): Promise<AuditLogEntry[]> => {
+      const all = await get<AuditLogEntry[]>("/admin/audit-logs?entity_type=blast_passport");
+      return all.filter((e) => e.entity_id === passportId);
+    },
   },
   reports: {
     list: (quarryId: string) =>

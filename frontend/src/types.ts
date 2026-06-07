@@ -112,3 +112,25 @@ export interface AuthUser {
   name?: string;
   email?: string;
 }
+
+export interface BlastEvent {
+  id: string;
+  passport_id: string;
+  executed_by_id: string;
+  blast_datetime: string; // ISO string
+  actual_explosive_kg: number | null;
+  weather_conditions: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  actor_id: string | null;
+  entity_type: string;
+  entity_id: string;
+  action: string;
+  occurred_at: string; // ISO string
+  old_value: Record<string, unknown> | null;
+  new_value: Record<string, unknown> | null;
+}
