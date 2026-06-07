@@ -1,6 +1,6 @@
 # ZMetrics — Roadmap
 
-Last sync: 2026-06-07 | HEAD: pending WEB-2 commit
+Last sync: 2026-06-07 | HEAD: `849e1f9`
 
 ---
 
@@ -67,7 +67,7 @@ Last sync: 2026-06-07 | HEAD: pending WEB-2 commit
 - [x] `confidence_notes` auto-populated when `confidence_score < 0.8`
 - [x] 15 unit tests for rule logic
 
-### WEB-2 — Passport workflow in web · `frontend/` (pending commit)
+### WEB-2 — Passport workflow in web · `frontend/` (`849e1f9`)
 - [x] Passport detail panel: all fields, colored status badge, click-to-open from list
 - [x] State transitions: DRAFT→SUBMITTED→APPROVED→ACTIVE→COMPLETED (one button per status, one POST each)
 - [x] Blast event registration form (APPROVED/ACTIVE only; `blast_datetime` required)
