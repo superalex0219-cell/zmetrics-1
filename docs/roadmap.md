@@ -1,6 +1,6 @@
 # ZMetrics — Roadmap
 
-Last sync: 2026-06-07 | HEAD: `ebb28e5`
+Last sync: 2026-06-07 | HEAD: `ff562ad`
 
 ---
 
@@ -16,118 +16,107 @@ Last sync: 2026-06-07 | HEAD: `ebb28e5`
 - [x] `AnalysisResult` computed from synthetic data (Rosin-Rammler)
 - [x] Pytest smoke tests
 
-### M1 — Backend MVP (`d162899` → `1d9ad72`)
+### M1 — Backend MVP + Security (`d162899` → `aa4c42f`)
 - [x] Keycloak JWT validation (RS256, JWKS fetch at runtime, issuer check)
 - [x] Per-quarry RBAC (`QuarryUserAccess`, `RoleLevel` USER/SURVEYOR/BLASTER/ADMIN)
 - [x] Full CRUD: quarries, site_sections, blast_passports (7-state machine)
 - [x] BlastEvent creation + CaptureSession + Artifact upload (MinIO presigned)
 - [x] AnalysisJob enqueue → Celery → AnalysisResult → Report → Recommendation
 - [x] AuditLog written on passport/recommendation/role/access state changes
-- [x] `GET /api/v1/analysis-results/{id}` (GAP-1, `8a200b6`)
-- [x] `ReportRead.analysis_method` derived from `ModelVersion.model_type` (GAP-2, `8a200b6`)
-- [x] Integration test suite: 49 tests against real Postgres
-- [x] SEC-1: IDOR in `add_comment` fixed (`1d9ad72`)
-- [x] SEC-2: `keycloak_sub` removed from API responses (`1d9ad72`)
-- [x] SEC-3: `dev-seed` gated behind `ENABLE_DEV_SEED` flag (`1d9ad72`)
-- [x] DB-1: `AnalysisJob.model_version_id` index + migration `6929bdaa526b` (`1d9ad72`)
+- [x] `GET /api/v1/analysis-results/{id}` (GAP-1)
+- [x] `ReportRead.analysis_method` derived from `ModelVersion.model_type` (GAP-2)
+- [x] Integration test suite: 53 tests against real Postgres
+- [x] SEC-1: IDOR in `add_comment` fixed
+- [x] SEC-2: `keycloak_sub` removed from API responses
+- [x] SEC-3: `dev-seed` gated behind `ENABLE_DEV_SEED` flag
+- [x] DB-1: `AnalysisJob.model_version_id` index + migration
+- [x] BACK-SEC-2: IDOR batch — `capture_sessions`, `blast_events`, `analysis` + magic-byte validation + AuditLog in dev_seed
 
-### WEB-1 — React Web Frontend (`frontend/`) ✅ (`09ca465`)
-- [x] React + Vite + TypeScript + Lucide + plain CSS (matches reference design)
-- [x] Keycloak OIDC browser redirect (check-sso + PKCE, `zmetrics-web` client)
-- [x] 7 screens wired to real API: Dashboard, Карьеры, Участки, Паспорта, Отчёты, Рекомендации, Auth
-- [x] Mock-pipeline badge (⚠ Синтетические данные), read-only parameter_suggestions
-- [x] JSON export with Bearer auth, review buttons (принять/отклонить/ознакомлен)
-- [x] Dockerised; `frontend` service in docker-compose; nginx proxy
-
-### MOB-DESIGN — Flutter visual refresh ✅ (`ebb28e5`)
-- [x] Primary color: teal `0xFF0F766E`; AppBar: `0xFF17202A` dark
-- [x] `StatCard` shared widget (teal icon, bold value)
-- [x] Russian labels: auth, quarries, sections, passports, reports, capture, offline banner
-
-### M4 (partial) — Flutter Mobile (parallel, started ahead of M2/M3)
+### M4 — Flutter Mobile (`796823a` → `ebb28e5`)
 - [x] Per-quarry RBAC: `AccessCubit`, `RoleLevel`, role-gated UI actions
 - [x] Quarry / section / passport list + create screens
 - [x] Passport state-machine UI (all 5 transitions, human-driven only)
 - [x] Offline queue: `SyncManager` (SQLite backend), idempotency keys, retry ×5
 - [x] Report screen: P10/P50/P80, Rosin-Rammler, cumulative passing table, mock badge
 - [x] Recommendation review (ACCEPT / REJECT / REVIEWED) + inline comments
-- [x] MOB-1: `analysisResultId` mapped, `getAnalysisResult` wired to live backend (`9dc2b4a`)
-- [x] Dead `_withDerivedMethod` heuristic removed (`9dc2b4a`)
+- [x] MOB-1: `getAnalysisResult` wired to live backend
+- [x] MOB-2: OIDC PKCE via `flutter_appauth` (Keycloak `zmetrics-mobile` client)
+- [x] MOB-3: Capture flow — device/calibration picker, SyncProcessor, job polling, navigate to reports
+- [x] MOB-4: Report JSON export via Android share sheet (`share_plus`)
+- [x] MOB-DESIGN: Teal theme `0xFF0F766E`, dark AppBar `0xFF17202A`, Russian labels, `StatCard` widget
+- [x] 63 tests total
 
-### BACK-SEC-2 — Backend IDOR batch #2 (pending commit)
-- [x] `capture_sessions.py`: quarry chain-walk + role checks + JPEG/PNG magic-byte validation
-- [x] `blast_events.py`: `_get_passport_in_quarry` + missing role checks
-- [x] `analysis.py::get_job_result`: session ownership enforced via AnalysisJob join
-- [x] `admin.py::dev_seed`: AuditLog for role_assigned (both seed paths)
-- [x] 53 tests (4 new security tests added)
-
----
-
-## IN PROGRESS / NEXT
-
-### MOB-2 — OIDC PKCE · `mobile/` only ✅ (pending commit)
-- [x] `AndroidManifest.xml`: `net.openid.appauth.RedirectUriReceiverActivity` + `zmetrics://` intent-filter
-- [x] `di.dart`: live path wires `OidcService` + `OidcAuthRepository`; `DevPasswordAuthRepository` kept
-- [x] `OidcAuthRepository.restore()`: decodes JWT claims via `decodeJwtClaims`
-- [x] `login_screen.dart`: removed ROPC fields; `StatelessWidget`; "Sign in via Keycloak"
-- [x] 2 unit tests (restore) + 2 widget tests (login screen) → 45 total
-
-### MOB-3 — Capture Flow · `mobile/` only ✅ (pending commit)
-- [x] `CaptureScreen`: device + calibration dropdowns; FAB gated on selection
-- [x] `kOpCreateCaptureSession` SyncProcessor handler wired to real backend URL
-- [x] `DeviceRepository` + `Device`/`DeviceCalibration` freezed models
-- [x] `listSessions` URL fixed to use quarryId + passportId path
-- [x] Job polling via `pollJobUntilTerminal`; LinearProgressIndicator; navigate to reports list on complete
-- [x] `PassportDetailScreen` "Captures" button; route updated to `/quarries/:qid/passports/:pid/captures`
-- [x] Backend: `capture_datetime` optional + `frame_count=0` default in `create_capture_session`
-- [x] 55 tests (10 new)
+### WEB-1 — React Web Frontend (`09ca465`)
+- [x] React + Vite + TypeScript + Lucide + plain CSS (matches reference design)
+- [x] Keycloak OIDC browser redirect (check-sso + PKCE, `zmetrics-web` Keycloak client)
+- [x] Auth screen: Keycloak redirect, display name in topbar, logout
+- [x] Dashboard: live quarry/section/report counts, latest analysis P80, fraction histogram
+- [x] Карьеры: real quarry cards from `GET /api/v1/quarries`
+- [x] Участки: quarry selector → `GET /api/v1/quarries/{id}/sections`
+- [x] Паспорта БВР: list + create form → `POST /api/v1/quarries/{id}/passports`
+- [x] Отчёты: list + JSON export (Bearer auth download), `⚠ Синтетические данные` mock badge
+- [x] Рекомендации: list + review (принять/отклонить/ознакомлен); `parameter_suggestions` read-only
+- [x] `frontend` service in docker-compose, nginx proxy, Dockerfile
+- [x] `tsc --noEmit` passes
 
 ---
 
-## BACKLOG (no hardware or deferred)
-
-### MOB-4 — Report export · `mobile/` ✅ (`f734b97`)
-- [x] GET `/reports/{id}/export` → `Uint8List` (ResponseType.bytes)
-- [x] Write to temp dir as `report_{id}_{yyyyMMdd}.json`
-- [x] Share sheet via `share_plus` (Android `ACTION_SEND`)
+## BACKLOG
 
 ### M5-a — Rule-based recommendations · `worker/`
-*No hardware needed. High value: engine currently writes a static placeholder text.*
+*High value. No hardware needed. Worker currently writes static placeholder recommendation text.*
 
-- [ ] Compare `AnalysisResult.p80_mm` vs `BlastPassport.target_fragment_size_mm`
-- [ ] Flag oversize (p80 > target × 1.1) and excessive fines (fines_percent > threshold)
+- [ ] Compare `AnalysisResult.p80_mm` vs `BlastPassport.target_p80_mm`
+- [ ] Flag oversize (p80 > target × 1.1) and excessive fines (`fines_percent > 15%`)
 - [ ] Write structured `Recommendation.parameter_suggestions` JSONB with basis text
-- [ ] `confidence_notes` when `confidence_score < 0.8`
+- [ ] `confidence_notes` auto-populated when `confidence_score < 0.8`
 - [ ] Unit tests for rule logic (no DB needed)
 
-### M5-b — LLM explanation layer · `worker/` or `backend/`
-*Depends on M5-a rules being stable.*
+### WEB-2 — Passport workflow in web · `frontend/`
+*Web currently has passport list + basic create. Missing the full workflow.*
 
-- [ ] Claude API call with structured output for `recommendation_text` (rules/product-safety.md: `requires_human_review` enforced, no auto-apply)
+- [ ] Passport detail view (all fields, status chip, revision history)
+- [ ] State transitions: DRAFT → SUBMITTED → APPROVED (human buttons, same safety rules as mobile)
+- [ ] Blast event creation form under passport detail
+- [ ] AuditLog display on passport detail (admin/blaster only)
+
+### M5-b — LLM explanation layer · `worker/` or `backend/`
+*Depends on M5-a rules being stable. Adds human-readable text to structured suggestions.*
+
+- [ ] Claude API call with structured output for `recommendation_text`
 - [ ] `confidence_notes` auto-generated from model output
 - [ ] Fallback to rule-text if LLM unavailable
+- [ ] Safety: `requires_human_review` enforced, no auto-apply
 
-### M5-c — Historical trends · `backend/` + `mobile/`
-- [ ] `GET /quarries/{id}/sections/{sid}/trend` — P80 over time per section
-- [ ] Mobile chart widget (sparkline, last 10 blasts)
+### M5-c — Historical P80 trends · `backend/` + `frontend/` + `mobile/`
+- [ ] `GET /api/v1/quarries/{id}/sections/{sid}/trend` — P80 over last N blasts per section
+- [ ] Web dashboard: sparkline chart in section/passport context
+- [ ] Mobile: sparkline widget on reports list screen
+
+### WEB-3 — Admin panel + audit log · `frontend/`
+*Low urgency — admin ops currently via direct API calls or dev-seed endpoint.*
+
+- [ ] Wire Admin screen: real user list from `GET /api/v1/quarry-users`
+- [ ] Audit log table: `GET /api/v1/audit-log` (paginated, admin only)
+- [ ] Role assignment UI (admin only — calls `POST /api/v1/quarries/{id}/users`)
 
 ---
 
 ## BLOCKED (requires ZED 2 hardware)
 
-### M2 — Real CV Stereo (8 weeks)
+### M2 — Real CV Stereo (≈8 weeks after hardware)
 - [ ] OpenCV stereo calibration step (replace mock `StereoCalibrationStep`)
 - [ ] Stereo rectification (replace mock)
 - [ ] StereoSGBM depth estimation (replace mock)
 - [ ] Open3D point cloud generation (replace mock)
 - [ ] Calibration import from ZED SDK `.conf` file
 
-### M3 — Segmentation + Particle Volumes (12 weeks, requires training data)
+### M3 — Segmentation + Particle Volumes (≈12 weeks, requires training data)
 - [ ] YOLO-seg adapter (`SegmentationAdapter` interface)
 - [ ] Training data collection and labeling pipeline
 - [ ] Particle mask → 3D volume projection
 - [ ] Granulometry from real particle measurements
-- [ ] Report PDF generation (WeasyPrint)
+- [ ] Report PDF generation (WeasyPrint) — web download button already wired to export endpoint
 - [ ] Ground truth validation (sieve analysis comparison)
 
 ---
@@ -140,5 +129,6 @@ Last sync: 2026-06-07 | HEAD: `ebb28e5`
 - [ ] MLOps: model versioning, retraining pipeline, dataset management
 - [ ] DVC / Git LFS for training datasets and model weights
 - [ ] Replace worker `db_models.py` hand-sync with shared package import
-- [ ] Keycloak user deactivation sync (currently revoked access not propagated on JWT refresh)
-- [ ] PDF report generation for export (M3 dependency)
+- [ ] Keycloak user deactivation sync (revoked access not propagated on JWT refresh)
+- [ ] Web: real-time job status via WebSocket (currently no live updates in web)
+- [ ] Mobile: push notifications for completed analysis jobs
