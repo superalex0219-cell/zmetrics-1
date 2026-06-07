@@ -1,7 +1,7 @@
 # ZMetrics — STATUS
 
-**Last updated:** 2026-06-07
-**Git HEAD:** `5316cad` — BUG-HUNT-1 frontend fixes
+**Last updated:** 2026-06-08
+**Git HEAD:** `b29b725` — UT-1 done, all fixes committed
 
 ---
 
@@ -24,7 +24,7 @@
 |-------|-------|-------|
 | **backend** | M1 + SEC-1 + BACK-SEC-2 + ARCH-1 | 53 tests. `audit-logs` теперь принимает `entity_id` query-param. |
 | **worker** | M1 + M5-a rule engine + ARCH-2 | `p10`/`p50` корректно `None` вместо `0.0` в pipeline. |
-| **frontend** | WEB-1 + WEB-2 + ARCH-1/3 + BUG-HUNT-1 | `downloadWithAuth` защищён. Все concurrent fetch через `Promise.allSettled`. `handleLoadRecommendations` имеет try/catch. |
+| **frontend** | WEB-1 + WEB-2 + ARCH-1/3 + BUG-HUNT-1 + UT-1 | Status case fix (lowercase). Полная форма создания паспорта (12 полей). `login-required` Keycloak. |
 | **mobile** | M1 + MOB-1/2/3/4 + MOB-DESIGN | 63 tests. Teal theme + dark AppBar. Russian labels. |
 | **infra** | stale image | Нужен `docker compose build backend worker` для ARCH-1/2 изменений. |
 
@@ -49,6 +49,7 @@
 | `7fa824d` | docs: roadmap UT/BUG-HUNT sections added |
 | `c077029` | ARCH fixes: downloadWithAuth origin check; p10/p50 None; audit-logs entity_id filter |
 | `5316cad` | BUG-HUNT-1: Promise.allSettled для concurrent fetch; try/catch в handleLoadRecommendations |
+| `b29b725` | UT-1: status case fix; полная форма паспорта (12 полей); login-required; detail fields |
 
 ---
 
@@ -56,8 +57,8 @@
 
 | Pri | ID | Item | Layer | Notes |
 |-----|----|------|-------|-------|
-| **P1** | UT-1 | User smoke test: web UI — паспорта, взрыв, рекомендации | browser | checklist в roadmap; rebuild контейнеров сначала |
-| P2 | UT-2 | Rule engine E2E: P80 vs target, текст рекомендации в UI | browser | depends UT-1 |
+| ~~P1~~ | ~~UT-1~~ | ~~User smoke test: web UI~~ | ~~done~~ | `b29b725` — 3 баги найдены и исправлены |
+| **P1** | UT-2 | Rule engine E2E: P80 vs target, текст рекомендации в UI | browser | depends UT-1 ✅ |
 | ~~P3~~ | ~~BUG-HUNT-1~~ | ~~Frontend error states & edge cases~~ | ~~done~~ | 5/7 ✅; 2 баги исправлены |
 | P3 | M5-b | LLM explanation layer (Claude API) | worker | depends M5-a stable |
 | later | UT-3 | Mobile smoke test | Android | нужен Android Studio + AVD |
