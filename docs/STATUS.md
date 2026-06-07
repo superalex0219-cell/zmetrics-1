@@ -1,20 +1,21 @@
 # ZMetrics — STATUS
 
 **Last updated:** 2026-06-08
-**Git HEAD:** `b29b725` — UT-1 done, all fixes committed
+**Git HEAD:** `faac5a6` — SAM3 weights downloaded; worker rebuild pending
 
 ---
 
 ## TL;DR для следующей сессии
 
 1. `git push origin main` — commits ahead of origin/main, never pushed.
-2. **Rebuild containers** after backend fix (audit-logs endpoint):
+2. **Rebuild worker** (SAM3 зависимости изменились — torch cu121 + transformers):
    ```powershell
-   docker compose -f infra\docker-compose.yml build backend worker
-   docker compose -f infra\docker-compose.yml up -d --force-recreate
+   docker compose -f infra\docker-compose.yml build worker
+   docker compose -f infra\docker-compose.yml up -d --force-recreate worker
    ```
    Web UI доступен на http://localhost:5173.
-3. **Next task:** UT-1 — user smoke test (checklist в roadmap).
+3. **Веса модели:** `d:\zmetrics\models\sam3\model.safetensors` (3.28 GB, `bodhicitta/sam3`) уже скачаны.
+4. **Next task:** UT-2 — rule engine E2E в браузере (P80 vs target, текст рекомендации).
 
 ---
 
@@ -23,7 +24,7 @@
 | Layer | State | Notes |
 |-------|-------|-------|
 | **backend** | M1 + SEC-1 + BACK-SEC-2 + ARCH-1 | 53 tests. `audit-logs` теперь принимает `entity_id` query-param. |
-| **worker** | M1 + M5-a rule engine + ARCH-2 | `p10`/`p50` корректно `None` вместо `0.0` в pipeline. |
+| **worker** | M1 + M5-a + SAM3 segmentation | `Sam3SegmentationStep` заменяет mock. Fallback на синтетику без ZED 2. Веса: `models/sam3/`. |
 | **frontend** | WEB-1 + WEB-2 + ARCH-1/3 + BUG-HUNT-1 + UT-1 | Status case fix (lowercase). Полная форма создания паспорта (12 полей). `login-required` Keycloak. |
 | **mobile** | M1 + MOB-1/2/3/4 + MOB-DESIGN | 63 tests. Teal theme + dark AppBar. Russian labels. |
 | **infra** | stale image | Нужен `docker compose build backend worker` для ARCH-1/2 изменений. |
@@ -50,6 +51,8 @@
 | `c077029` | ARCH fixes: downloadWithAuth origin check; p10/p50 None; audit-logs entity_id filter |
 | `5316cad` | BUG-HUNT-1: Promise.allSettled для concurrent fetch; try/catch в handleLoadRecommendations |
 | `b29b725` | UT-1: status case fix; полная форма паспорта (12 полей); login-required; detail fields |
+| `2079e0b` | SAM3: Sam3SegmentationStep (facebook/sam3 via transformers); torch CUDA; synthetic fallback |
+| `faac5a6` | fix: bodhicitta/sam3 model path; original_sizes pre-device fix; .env.example SAM3 vars |
 
 ---
 
@@ -58,7 +61,7 @@
 | Pri | ID | Item | Layer | Notes |
 |-----|----|------|-------|-------|
 | ~~P1~~ | ~~UT-1~~ | ~~User smoke test: web UI~~ | ~~done~~ | `b29b725` — 3 баги найдены и исправлены |
-| **P1** | UT-2 | Rule engine E2E: P80 vs target, текст рекомендации в UI | browser | depends UT-1 ✅ |
+| **P1** | UT-2 | Rule engine E2E: P80 vs target, текст рекомендации в UI | browser | depends UT-1 ✅; нужен passport с `target_p80_mm=500` |
 | ~~P3~~ | ~~BUG-HUNT-1~~ | ~~Frontend error states & edge cases~~ | ~~done~~ | 5/7 ✅; 2 баги исправлены |
 | P3 | M5-b | LLM explanation layer (Claude API) | worker | depends M5-a stable |
 | later | UT-3 | Mobile smoke test | Android | нужен Android Studio + AVD |
