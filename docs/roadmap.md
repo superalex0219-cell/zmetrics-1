@@ -1,6 +1,6 @@
 # ZMetrics — Roadmap
 
-Last sync: 2026-06-07 | HEAD: `849e1f9`
+Last sync: 2026-06-08 | HEAD: `d4e36fe`
 
 ---
 
@@ -48,7 +48,7 @@ Last sync: 2026-06-07 | HEAD: `849e1f9`
 
 ### WEB-1 — React Web Frontend (`09ca465`)
 - [x] React + Vite + TypeScript + Lucide + plain CSS (matches reference design)
-- [x] Keycloak OIDC browser redirect (check-sso + PKCE, `zmetrics-web` Keycloak client)
+- [x] Keycloak OIDC browser redirect (login-required + PKCE, `zmetrics-web` Keycloak client)
 - [x] Auth screen: Keycloak redirect, display name in topbar, logout
 - [x] Dashboard: live quarry/section/report counts, latest analysis P80, fraction histogram
 - [x] Карьеры: real quarry cards from `GET /api/v1/quarries`
@@ -66,6 +66,18 @@ Last sync: 2026-06-07 | HEAD: `849e1f9`
 - [x] Join chain `CaptureSession → BlastEvent → BlastPassport` in `_create_report_and_recommendation`
 - [x] `confidence_notes` auto-populated when `confidence_score < 0.8`
 - [x] 15 unit tests for rule logic
+
+### SAM3 — Real segmentation step · `worker/` (`2079e0b` → `faac5a6`)
+- [x] `Sam3SegmentationStep` replaces `MockSegmentationStep` in the pipeline
+- [x] Model: `bodhicitta/sam3` (SAM3 Video, `model.safetensors` 3.28 GB) — weights at `models/sam3/`
+- [x] Inference via `transformers` `Sam3Model` + `Sam3Processor`; runs on CUDA if available
+- [x] Output format (masks.json: `bbox_normalized`, `polygon_normalized`, `confidence`) identical to mock
+- [x] Idempotency: skips if `masks.json` already in MinIO
+- [x] Graceful fallback to synthetic masks when no `left_frame` artifact found (no ZED 2 hardware)
+- [x] Thread-safe singleton: model loaded once per worker process
+- [x] GPU deploy section in `docker-compose.yml`; SAM3 volume mount `models/sam3:/models/sam3:ro`
+- [x] `infra/.env.example` updated with `SAM3_WEIGHTS_DIR`, `SAM3_MODEL_PATH`, `SAM3_TEXT_PROMPT`
+- [ ] Worker image rebuild needed: `docker compose build worker` (torch cu121 + transformers)
 
 ### WEB-2 — Passport workflow in web · `frontend/` (`849e1f9`)
 - [x] Passport detail panel: all fields, colored status badge, click-to-open from list
@@ -202,7 +214,8 @@ Bug hunts are periodic code-review tasks run by an executor agent (no UI needed)
 - [ ] Calibration import from ZED SDK `.conf` file
 
 ### M3 — Segmentation + Particle Volumes (≈12 weeks, requires training data)
-- [ ] YOLO-seg adapter (`SegmentationAdapter` interface)
+- [x] SAM3 segmentation step — text-prompted instance segmentation (`Sam3SegmentationStep`)
+- [ ] YOLO-seg fine-tuning adapter (alternative to SAM3 for embedded/edge deployment)
 - [ ] Training data collection and labeling pipeline
 - [ ] Particle mask → 3D volume projection
 - [ ] Granulometry from real particle measurements
