@@ -85,6 +85,11 @@ class ApiClient:
     def post(self, path: str, json: dict | None = None) -> Any:
         return self._request("POST", path, json=json)
 
+    def post_multipart(self, path: str, data: dict, files: dict) -> Any:
+        """POST a multipart form (file uploads). ``files``: httpx format, e.g.
+        ``{"file": (filename, bytes, content_type)}``."""
+        return self._request("POST", path, data=data, files=files)
+
     def patch(self, path: str, json: dict | None = None) -> Any:
         return self._request("PATCH", path, json=json)
 

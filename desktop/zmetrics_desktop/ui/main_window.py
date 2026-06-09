@@ -106,10 +106,14 @@ class MainWindow(QMainWindow):
         self._nav.setFixedWidth(220)
         self._nav.setObjectName("nav")
 
+        from zmetrics_desktop.ui.state import AppState
+
+        self._state = AppState()
+
         self._stack = QStackedWidget()
         for nav_label, title in SCREENS:
             self._nav.addItem(nav_label)
-            self._stack.addWidget(_placeholder(title))
+            self._stack.addWidget(self._build_screen(nav_label, title))
 
         self._nav.currentRowChanged.connect(self._stack.setCurrentIndex)
         self._nav.setCurrentRow(0)
@@ -121,6 +125,16 @@ class MainWindow(QMainWindow):
         if self._context is not None:
             self._build_auth_toolbar()
             self._build_sync_status()
+
+    def _build_screen(self, nav_label: str, title: str) -> QWidget:
+        """Real screen when implemented (needs a context), placeholder otherwise."""
+        if self._context is None:
+            return _placeholder(title)
+        if nav_label == "Дашборд":
+            from zmetrics_desktop.ui.dashboard import DashboardScreen
+
+            return DashboardScreen(self._context, self._state)
+        return _placeholder(title)
 
     # --- Auth toolbar -----------------------------------------------------------
 
