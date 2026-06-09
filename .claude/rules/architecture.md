@@ -27,12 +27,26 @@ No shortcut paths. A `Report` cannot exist without an `AnalysisResult`. An `Anal
 | `backend/app/schemas/` | API contracts | Import ORM models directly |
 | `worker/app/pipeline/` | CV/ML computation | Call FastAPI endpoints |
 | `worker/app/tasks/` | Celery orchestration | Contain CV math |
+| `desktop/zmetrics_desktop/api/` | REST calls to the backend | Contain UI or business logic |
+| `desktop/zmetrics_desktop/ui/` | PySide6 views | Contain network or business logic |
+
+## Client
+
+- The single client is a **Python + PySide6 desktop app** (`desktop/`), Windows-first.
+  It replaces the former React web and Flutter mobile apps.
+- The client is a thin consumer of the `/api/v1/` REST API plus local stereo capture
+  (ZED 2 as UVC) and an offline SQLite queue. See `desktop.md`.
+- **CV runs server-side** (in the worker). The client only captures side-by-side frames,
+  splits them into left/right, and uploads. If part of the CV is later moved to the
+  client, share it via an importable package derived from `worker/app/pipeline/` — do not
+  duplicate the math.
 
 ## Async All the Way
 
 - Backend: always `async def` endpoints, `AsyncSession`, `await db.execute()`
 - Worker: use `asyncio.run()` at Celery task boundary; keep async pipeline internally
 - Never mix sync and async SQLAlchemy in the same session
+- Desktop client: keep network/camera off the Qt UI thread (`QThreadPool` workers)
 
 ## Storage Split
 

@@ -1,6 +1,4 @@
----
 # Domain Model Rules
----
 
 ## Entity Naming
 Use these English names consistently in code:

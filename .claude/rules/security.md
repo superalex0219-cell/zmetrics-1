@@ -10,6 +10,14 @@ These rules apply to all code in the project.
 - Role checks MUST be per-quarry (via `QuarryUserAccess`), not global
 - Revoked access (`revoked_at IS NOT NULL`) MUST be treated as no access
 
+## Desktop client auth (OIDC PKCE)
+
+- The desktop client uses OIDC Authorization Code + PKCE with a **loopback redirect**
+  (`http://localhost:<port>/callback`) against the public Keycloak client `zmetrics-desktop`
+- Never embed a client secret in the desktop app (public client)
+- Tokens stored in the OS keyring (Windows Credential Manager) — never plaintext, never logged
+- Refresh on 401, retry once
+
 ## Secrets management
 
 - Secrets come from environment variables only
@@ -40,9 +48,11 @@ These rules apply to all code in the project.
 
 ## CORS
 
-- `BACKEND_CORS_ORIGINS` is an explicit allowlist in `.env`
-- Never set `allow_origins=["*"]` in production
-- Credentials mode requires explicit origin (not wildcard)
+- The native desktop client does not require CORS (no browser origin). The web frontend
+  has been removed, so `BACKEND_CORS_ORIGINS` is no longer needed for normal operation.
+- If a browser-based tool ever calls the API, keep `BACKEND_CORS_ORIGINS` an explicit
+  allowlist in `.env` — never `allow_origins=["*"]` in production, and credentials mode
+  requires an explicit origin (not wildcard).
 
 ## Rate limiting
 

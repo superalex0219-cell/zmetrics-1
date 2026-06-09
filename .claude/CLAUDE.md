@@ -19,8 +19,8 @@ Platform for managing blast work passports (паспорт БВР), capturing st
 - **Storage**: PostgreSQL 16 for structured data. MinIO (S3-compatible) for stereo frames, point clouds, masks, report files.
 - **Async**: Celery + Redis. Analysis jobs run in the worker container.
 - **Backend**: FastAPI + Pydantic v2 + SQLAlchemy 2.0 (async) + Alembic
-- **Worker**: Celery + mock CV pipeline. Real CV (OpenCV/Open3D/YOLO-seg) is a later milestone.
-- **Mobile**: Flutter Android-first, offline store-and-forward.
+- **Worker**: Celery + CV pipeline. SAM3 segmentation is live; stereo CV (OpenCV/Open3D) runs behind `ENABLE_REAL_STEREO`; mock steps remain as fallback.
+- **Client**: Python + PySide6 desktop app (Windows-first), offline store-and-forward. Captures ZED 2 stereo over USB (UVC), splits side-by-side into left/right, uploads to the backend (CV stays server-side). Replaces the former React web + Flutter mobile clients.
 
 ## Entity Hierarchy (process flow)
 ```
@@ -47,8 +47,8 @@ Quarry → SiteSection → BlastPassport → BlastEvent
 
 ## Monorepo Layout
 - `backend/` — FastAPI app, SQLAlchemy models, Alembic migrations, Pydantic schemas, tests
-- `worker/` — Celery tasks, pipeline interface + mock implementations
-- `mobile/` — Flutter Android-first app
+- `worker/` — Celery tasks, pipeline interface + mock/real implementations
+- `desktop/` — Python + PySide6 desktop client (Windows-first), ZED 2 capture + offline queue
 - `infra/` — Docker Compose, Keycloak realm config, MinIO init script
 - `docs/` — Architecture docs, domain model, API contract, pipeline spec, roadmap
 - `scripts/` — PowerShell bootstrap and migration helpers
@@ -79,4 +79,16 @@ docker compose -f infra\docker-compose.yml exec backend pytest -v
 View logs:
 ```powershell
 docker compose -f infra\docker-compose.yml logs -f backend worker
+```
+
+Run the desktop client (Windows host, not containerized):
+```powershell
+cd desktop
+python -m zmetrics_desktop
+```
+
+Build the desktop client:
+```powershell
+cd desktop
+pyinstaller zmetrics_desktop.spec
 ```

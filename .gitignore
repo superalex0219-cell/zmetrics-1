@@ -31,6 +31,16 @@ infra/secrets/
 .claude/settings.local.json
 .claude/worktrees/
 
+# Local dev tooling / temp junk
+.tools/
+.codex_tmp/
+frontend;C/
+
+# Desktop client (PyInstaller output)
+desktop/build/
+desktop/dist/
+*.spec~
+
 # Flutter / Dart
 .dart_tool/
 .flutter-plugins
@@ -73,9 +83,6 @@ artifacts/
 # OS
 .DS_Store
 Thumbs.db
-
-# Reference UI prototype (not part of the monorepo)
-ZMetrics-test-webi-nterface/
 
 # Logs
 *.log
