@@ -83,3 +83,32 @@ def test_204_returns_none():
 
     with _client(handler) as api:
         assert api.delete("/admin/users/1") is None
+
+
+def test_is_reachable_hits_root_health_without_auth_path():
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = str(request.url)
+        return httpx.Response(200, json={"status": "ok"})
+
+    with _client(handler) as api:
+        assert api.is_reachable() is True
+    # Root /health — not under /api/v1.
+    assert seen["url"] == "http://localhost:8000/health"
+
+
+def test_is_reachable_false_on_connect_error():
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("refused")
+
+    with _client(handler) as api:
+        assert api.is_reachable() is False
+
+
+def test_is_reachable_false_on_5xx():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(503)
+
+    with _client(handler) as api:
+        assert api.is_reachable() is False

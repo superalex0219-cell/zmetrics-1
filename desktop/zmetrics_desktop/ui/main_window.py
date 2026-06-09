@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, Signal
+from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, QTimer, Signal
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -23,6 +23,9 @@ from PySide6.QtWidgets import (
 
 if TYPE_CHECKING:
     from zmetrics_desktop.context import AppContext
+    from zmetrics_desktop.offline.sync_processor import SyncReport
+
+SYNC_INTERVAL_MS = 30_000  # drain the offline queue every 30 s
 
 # (nav label, screen title) in display order.
 SCREENS: list[tuple[str, str]] = [
@@ -67,6 +70,26 @@ class _LoginWorker(QRunnable):
             self.signals.succeeded.emit()
 
 
+class _SyncWorker(QRunnable):
+    """One offline-queue drain pass off the UI thread (own sqlite connection)."""
+
+    class Signals(QObject):
+        finished = Signal(object)  # SyncReport
+
+    def __init__(self, context: AppContext) -> None:
+        super().__init__()
+        self._context = context
+        self.signals = self.Signals()
+
+    def run(self) -> None:
+        queue = self._context.make_sync_manager()
+        try:
+            report = self._context.make_sync_processor(queue).process_once()
+        finally:
+            queue.close()
+        self.signals.finished.emit(report)
+
+
 class MainWindow(QMainWindow):
     def __init__(self, context: AppContext | None = None) -> None:
         super().__init__()
@@ -97,6 +120,7 @@ class MainWindow(QMainWindow):
 
         if self._context is not None:
             self._build_auth_toolbar()
+            self._build_sync_status()
 
     # --- Auth toolbar -----------------------------------------------------------
 
@@ -142,3 +166,39 @@ class MainWindow(QMainWindow):
         assert self._context is not None
         self._context.auth.logout()
         self._refresh_auth_ui()
+
+    # --- Offline queue sync -------------------------------------------------------
+
+    def _build_sync_status(self) -> None:
+        self._sync_status = QLabel("Соединение…")
+        self.statusBar().addPermanentWidget(self._sync_status)
+        self._sync_running = False
+
+        self._sync_timer = QTimer(self)
+        self._sync_timer.setInterval(SYNC_INTERVAL_MS)
+        self._sync_timer.timeout.connect(self._start_sync)
+        self._sync_timer.start()
+        QTimer.singleShot(0, self._start_sync)  # first pass right after startup
+
+    def _start_sync(self) -> None:
+        assert self._context is not None
+        if self._sync_running:  # never overlap two drain passes
+            return
+        self._sync_running = True
+        worker = _SyncWorker(self._context)
+        worker.signals.finished.connect(self._on_sync_finished)
+        QThreadPool.globalInstance().start(worker)
+
+    def _on_sync_finished(self, report: SyncReport) -> None:
+        self._sync_running = False
+        if not report.online:
+            text = "⚠ Оффлайн"
+            if report.remaining:
+                text += f" · в очереди: {report.remaining}"
+        elif report.remaining or report.failed:
+            text = f"Онлайн · в очереди: {report.remaining}"
+            if report.failed:
+                text += f" · ошибок: {report.failed}"
+        else:
+            text = "Онлайн"
+        self._sync_status.setText(text)

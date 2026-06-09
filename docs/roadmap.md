@@ -192,7 +192,8 @@ Bug hunts are periodic code-review tasks run by an executor agent (no UI needed)
 - [x] Capture: UVC device enumeration (pygrabber/MSMF) + `cv2.VideoCapture` full-SBS
       (`capture/camera.py`: ZED2 SBS-режимы, инжектируемый источник, 12 тестов)
       *(код готов; остаётся E2E на железе с `ENABLE_REAL_STEREO=true`)*
-- [ ] Offline queue wired to ApiClient (drain on `/health` reachable)
+- [x] Offline queue wired to ApiClient: `SyncProcessor` (реестр хендлеров по `kind`,
+      ApiError → попытка ×5, обрыв сети → стоп без попытки) + статус-бар с QTimer 30s
 - [ ] Screens: login, dashboard, карьеры, участки, паспорта (+статусы, взрыв), capture+анализ,
       отчёты (Rosin-Rammler, JSON export, mock badge), рекомендации (read-only suggestions),
       админка (ADMIN-USERS-2 спека → desktop)

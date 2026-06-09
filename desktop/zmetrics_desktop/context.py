@@ -13,6 +13,7 @@ from zmetrics_desktop.auth.oidc import AuthManager
 from zmetrics_desktop.auth.token_store import TokenStore
 from zmetrics_desktop.config import Settings, load_settings
 from zmetrics_desktop.offline.sync_manager import SyncManager
+from zmetrics_desktop.offline.sync_processor import SyncProcessor
 
 
 @dataclass
@@ -24,6 +25,10 @@ class AppContext:
     def make_sync_manager(self) -> SyncManager:
         """SyncManager is per-thread (sqlite3); create one where it is used."""
         return SyncManager(self.settings.offline_db_path)
+
+    def make_sync_processor(self, queue: SyncManager) -> SyncProcessor:
+        """Processor over a caller-owned (per-thread) queue."""
+        return SyncProcessor(self.api, queue)
 
     @classmethod
     def build(cls) -> AppContext:

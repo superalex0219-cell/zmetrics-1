@@ -71,6 +71,14 @@ class ApiClient:
         detail = _extract_detail(resp)
         raise ApiError(resp.status_code, detail)
 
+    def is_reachable(self) -> bool:
+        """True when the backend ``/health`` endpoint answers (root path, no auth)."""
+        url = f"{self._settings.backend_base_url.rstrip('/')}/health"
+        try:
+            return self._client.get(url).is_success
+        except httpx.HTTPError:
+            return False
+
     def get(self, path: str, params: dict | None = None) -> Any:
         return self._request("GET", path, params=params)
 
