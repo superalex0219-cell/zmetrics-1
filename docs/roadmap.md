@@ -1,6 +1,11 @@
 # ZMetrics — Roadmap
 
-Last sync: 2026-06-08 | HEAD: `d4e36fe`
+Last sync: 2026-06-10 | HEAD: `4aa677b`
+
+> **⚠ Архитектурный пивот 2026-06-10:** React-веб (`frontend/`) и Flutter-mobile (`mobile/`)
+> упраздняются в пользу единого десктоп-клиента **Python + PySide6** (`desktop/`, Windows-first).
+> CV остаётся на сервере; backend/worker не меняются. Завершённые WEB-*/M4-вехи в DONE —
+> исторический архив. См. DESKTOP-1 ниже.
 
 ---
 
@@ -67,6 +72,16 @@ Last sync: 2026-06-08 | HEAD: `d4e36fe`
 - [x] `confidence_notes` auto-populated when `confidence_score < 0.8`
 - [x] 15 unit tests for rule logic
 
+### M5-b — LLM explanation layer · `worker/` (working tree)
+- [x] `app/llm.py`: `enhance_recommendation_text()` — Anthropic API turns rule facts into advisory Russian prose
+- [x] Gated behind `ENABLE_LLM_RECOMMENDATIONS` + `ANTHROPIC_API_KEY`; default off
+- [x] Lazy SDK import — `import app.llm` works even without `anthropic` installed (verified in running container)
+- [x] Fallback-safe: disabled / no key / missing SDK / API error / empty response → deterministic M5-a rule text; no exception escapes
+- [x] `MOCK_BADGE` + `REVIEW_FOOTER` enforced in code via `_wrap_with_safety` (single source = `app.rules`)
+- [x] Safety: `parameter_suggestions` + `confidence_notes` stay rule-engine-driven; `status=REQUIRES_HUMAN_REVIEW` untouched; prompt forbids numeric BVR params; `max_retries=0`
+- [x] 9 unit tests (Anthropic client fully mocked); worker suite 23 → 32 green
+- [ ] *Activate:* rebuild worker image with `anthropic`, set flag + key — feature dormant until then
+
 ### SAM3 — Real segmentation step · `worker/` (`2079e0b` → `faac5a6`)
 - [x] `Sam3SegmentationStep` replaces `MockSegmentationStep` in the pipeline
 - [x] Model: `bodhicitta/sam3` (SAM3 Video, `model.safetensors` 3.28 GB) — weights at `models/sam3/`
@@ -77,7 +92,9 @@ Last sync: 2026-06-08 | HEAD: `d4e36fe`
 - [x] Thread-safe singleton: model loaded once per worker process
 - [x] GPU deploy section in `docker-compose.yml`; SAM3 volume mount `models/sam3:/models/sam3:ro`
 - [x] `infra/.env.example` updated with `SAM3_WEIGHTS_DIR`, `SAM3_MODEL_PATH`, `SAM3_TEXT_PROMPT`
-- [ ] Worker image rebuild needed: `docker compose build worker` (torch cu121 + transformers)
+- [x] Worker image rebuilt and running with CUDA PyTorch cu128 (`torch 2.11.0+cu128`, `torchvision 0.26.0+cu128`)
+- [x] Local GPU smoke: `rock-sample.png` -> 77 SAM3 masks
+- [x] Container GPU smoke: `rock-sample.png` -> 77 SAM3 masks, CUDA, ~5.9s
 
 ### WEB-2 — Passport workflow in web · `frontend/` (`849e1f9`)
 - [x] Passport detail panel: all fields, colored status badge, click-to-open from list
@@ -88,11 +105,36 @@ Last sync: 2026-06-08 | HEAD: `d4e36fe`
 - [x] `onUpdated` prop wired: status changes reflected immediately in passport list
 - [x] `tsc --noEmit` — 0 errors
 
+### WEB-UI-1 — Bootstrap + responsive redesign · `frontend/` + `backend/` (working tree)
+- [x] Empty DB bootstrap: first authenticated user can create the first quarry
+- [x] Quarry creator receives admin access automatically
+- [x] Quarry creation fixed for users with multiple admin accesses
+- [x] Web UI can create quarries and site sections without dev-seed
+- [x] Responsive app shell: fixed topbar, desktop sidebar, mobile drawer, breadcrumbs
+- [x] UI feedback: toast notifications, loading banner, clearer empty/error states
+- [x] Dashboard rebuilt as operational workflow screen with quick actions and latest reports
+- [x] Quarries/Sites rebuilt as management layouts
+- [x] Reports search/sort added
+- [x] Docker frontend build passes; nginx serves latest redesigned assets
+
+### WEB-ANALYSIS-1 — Browser capture + analysis launcher · `frontend/` + `worker/` + `backend/` (working tree)
+- [x] `Анализы` page: live `getUserMedia` preview, photo gallery, passport selector (APPROVED/ACTIVE only)
+- [x] ZED 2 SBS auto-detect (aspect ratio > 1.8 → split left/right at width/2)
+- [x] Capture → upload `left_frame`/`right_frame` artifacts → create capture session → enqueue job → poll → show P80
+- [x] M2-STEREO: real OpenCV `StereoSGBM` pipeline (`cv_calibration`/`rectification`/`depth`/`pointcloud`), `ENABLE_REAL_STEREO` flag
+- [x] WORKER-FIX-1: `Artifact.storage_bucket`/`storage_key`, `CaptureSession.calibration_id`/`device_id`, `Calibration` stub
+- [x] E2E live-test fixes (rev 6):
+  - [x] Device/calibration self-heal inside `handleLaunch` (auto-creates default ZED 2 if none) — no separate setup step
+  - [x] `POST /devices` returns 409 (not 500) on duplicate serial_number
+  - [x] **Fixed 422 on `POST /captures/{id}/jobs`** — removed redundant required `capture_session_id` from `AnalysisJobCreate` body (it comes from the URL path); body now optional
+- [ ] Show SAM3 artifact metadata (`masks.json` source, mask count, confidence) in completed-job panel — *deferred*
+- [ ] Bundled `rock-sample.png` smoke option (no camera) — *deferred*
+
 ---
 
 ## QA & USER TESTING
 
-User testing is done by the product owner directly in the browser UI.
+User testing is done by the product owner in the desktop client (ранее — browser UI).
 Bug hunts are periodic code-review tasks run by an executor agent (no UI needed).
 
 ---
@@ -119,12 +161,12 @@ Bug hunts are periodic code-review tasks run by an executor agent (no UI needed)
 
 ---
 
-### UT-2 — Rule engine E2E · browser + API
-*Verify M5-a output is visible in the web UI.*
+### UT-2 — Rule engine E2E · desktop + API
+*Verify M5-a output is visible in the client UI. Blocked until DESKTOP-1 screens (reports/recommendations) exist.*
 
-**Pre-condition:** UT-1 прошёл. Паспорт с `target_p80_mm = 500` существует в БД.
+**Pre-condition:** Паспорт с `target_p80_mm = 500` существует в БД. For real SAM3 verification, trigger an actual analysis job via API/desktop; `dev-seed` only proves seeded report/recommendation UI.
 
-- [ ] Запустить анализ через мобильное приложение (или через dev-seed)
+- [ ] Запустить анализ через десктоп-клиент (или через dev-seed/API)
 - [ ] Открыть Отчёты → найти последний отчёт → открыть Рекомендации
 - [ ] Текст рекомендации содержит "⚠ Синтетические данные"
 - [ ] Если P80 > 550 мм: текст содержит "КРУПНЫЙ КЛАСС"
@@ -134,31 +176,36 @@ Bug hunts are periodic code-review tasks run by an executor agent (no UI needed)
 
 ---
 
-### UT-3 — Mobile smoke test · Android device / emulator
-*Run after rebuilding the app. Matches M4 acceptance criteria.*
+## IN PROGRESS
 
-- [ ] Войти через PKCE (Keycloak login в браузере) → вернуться в приложение авторизованным
-- [ ] Список карьеров загружается
-- [ ] Создать паспорт → статус DRAFT
-- [ ] Подать паспорт → SUBMITTED
-- [ ] Запустить capture flow: выбрать device + calibration → идёт polling → переход на отчёт
-- [ ] Отчёт: P10/P50/P80 показаны, mock badge "⚠ Синтетические данные" виден
-- [ ] Кнопка Export → Android share sheet открылся
+### DESKTOP-1 — Python/PySide6 desktop client · `desktop/` (working tree)
+*Pivot 2026-06-10: single client replaces React web + Flutter mobile. Plan:
+`C:\Users\Nikita\.claude\plans\quizzical-spinning-backus.md`.*
+
+- [x] Repo cleanup (`.tools/`, `artifacts/`, junk dirs) + `.gitignore`
+- [x] `.claude` rules rewritten (merged duplicates, `desktop.md`, mobile rules removed)
+- [x] Scaffold: pyproject, config (pydantic-settings), httpx ApiClient, sqlite SyncManager
+      (idempotency_key, retry ×5), SBS-split (`capture/stereo.py`), nav shell — 10 tests green
+- [x] OIDC PKCE loopback auth: ephemeral-port callback, system browser, state check,
+      keyring token store, 401→refresh→retry; Keycloak client `zmetrics-desktop` added
+      *(код готов; pytest прогон заблокирован недоступностью шелла)*
+- [x] Capture: UVC device enumeration (pygrabber/MSMF) + `cv2.VideoCapture` full-SBS
+      (`capture/camera.py`: ZED2 SBS-режимы, инжектируемый источник, 12 тестов)
+      *(код готов; остаётся E2E на железе с `ENABLE_REAL_STEREO=true`)*
+- [ ] Offline queue wired to ApiClient (drain on `/health` reachable)
+- [ ] Screens: login, dashboard, карьеры, участки, паспорта (+статусы, взрыв), capture+анализ,
+      отчёты (Rosin-Rammler, JSON export, mock badge), рекомендации (read-only suggestions),
+      админка (ADMIN-USERS-2 спека → desktop)
+- [ ] SAM3 artifact metadata в панели завершённого job + `rock-sample.png` smoke без камеры
+      *(перенесено из WEB-ANALYSIS-2)*
+- [ ] Remove `frontend/` + `mobile/`; drop `frontend` service from compose; prune
+      `zmetrics-web`/`zmetrics-mobile` Keycloak clients
+- [ ] PyInstaller build (+ опц. инсталлятор); backend URL на первом запуске
+- [ ] Docs: STATUS/roadmap reconcile + handoff
 
 ---
 
 ## BACKLOG
-
-### BUG-HUNT-1 — Frontend error states & edge cases · `frontend/` (`5316cad`)
-*Periodic. Run whenever ≥2 new frontend features land. No UI access needed — code review only.*
-
-- [x] Empty states: каждый список имеет fallback (нет данных / не вошли)
-- [x] Loading states: не мигают, нет двойного fetch
-- [x] Network error: fetch в `useEffect` не проглатывает ошибки молча — исправлено `5316cad`
-- [x] `Promise.allSettled` usage: все блоки используют `allSettled` там, где 404/403 ожидаемы — исправлено `5316cad`
-- [x] Типизация: `tsc --noEmit` чистый, нет `as unknown as X`
-- [x] `parameter_suggestions` — нет кода, записывающего значения обратно в паспорт
-- [x] Audit log: нет кнопки "удалить запись"
 
 ### BUG-HUNT-2 — Backend security & data integrity · `backend/`
 *Periodic. Run whenever ≥2 новых endpoint-а добавлено. Read-only code review.*
@@ -182,36 +229,63 @@ Bug hunts are periodic code-review tasks run by an executor agent (no UI needed)
 - [ ] `parameter_suggestions` нигде не читается и не записывается в `BlastPassport`
 - [ ] `asyncio.set_event_loop_policy` присутствует для Windows в Celery task
 
-### M5-b — LLM explanation layer · `worker/` or `backend/`
-*Depends on M5-a rules being stable. Adds human-readable text to structured suggestions.*
+### DEPTH-2 — IGEV-Stereo depth backend · `worker/`
+*Decided 2026-06-10. Replace SGBM disparity with a learned stereo network for metric accuracy.
+Depth error grows as `z²·Δd/(f·B)`: with ZED 2 (B=120mm, HD720) 1px disparity error ≈ 1.2m
+depth error at 10m — subpixel quality of disparity directly drives P10/P50/P80 accuracy.
+Do AFTER desktop E2E works with SGBM (pipe first, then quality).*
 
-- [ ] Claude API call with structured output for `recommendation_text`
-- [ ] `confidence_notes` auto-generated from model output
-- [ ] Fallback to rule-text if LLM unavailable
-- [ ] Safety: `requires_human_review` enforced, no auto-apply
+- [ ] `worker/app/pipeline/igev_depth.py` — `PipelineStep`, same artifact contract as
+      `cv_depth.py` (reads `rectified_left/right.jpg` + `Q_matrix.json`; writes
+      `depth_map.npy` + `disparity.npy`); only disparity computation changes (SGBM → IGEV inference)
+- [ ] Backend selection via env `DEPTH_BACKEND=sgbm|igev` (default `sgbm`); SGBM stays as fallback/baseline
+- [ ] Weights mounted `models/igev:/models/igev:ro` (same pattern as SAM3); verify repo license (MIT expected)
+- [ ] Register as `ModelVersion`; step metadata must include model version (real-CV labeling rule)
+- [ ] Confidence: left-right consistency check → occlusion mask + `confidence_score`
+      (IGEV has no native uncertainty; rules require confidence fields)
+- [ ] Inference at rectified resolution (≤720p is enough: max disparity ~28px at 3–15m range)
+- [ ] Validation protocol: scene with known-size reference object (~200mm marker),
+      compare SGBM vs IGEV measured sizes; record results in `StepResult.metadata`
+- [ ] Fallback alternative if IGEV underperforms on quarry scenes: RAFT-Stereo (MIT)
 
-### M5-c — Historical P80 trends · `backend/` + `frontend/` + `mobile/`
+### M5-c — Historical P80 trends · `backend/` + `desktop/`
 - [ ] `GET /api/v1/quarries/{id}/sections/{sid}/trend` — P80 over last N blasts per section
-- [ ] Web dashboard: sparkline chart in section/passport context
-- [ ] Mobile: sparkline widget on reports list screen
+- [ ] Desktop dashboard: sparkline chart in section/passport context
 
-### WEB-3 — Admin panel + audit log · `frontend/`
-*Low urgency — admin ops currently via direct API calls or dev-seed endpoint.*
+### ADMIN-USERS — Admin user management (Keycloak Admin API) · `backend/` + `infra/` + `desktop/`
+*User-requested 2026-06-09. Specced — supersedes the "user list / role assignment" parts of WEB-3.*
 
-- [ ] Wire Admin screen: real user list from `GET /api/v1/quarry-users`
-- [ ] Audit log table: `GET /api/v1/audit-log` (paginated, admin only)
-- [ ] Role assignment UI (admin only — calls `POST /api/v1/quarries/{id}/users`)
+- [x] **ADMIN-USERS-1** (backend+infra, working tree) → `docs/handoffs/2026-06-09-TASK-admin-users-1-backend.md`
+  - [x] `services/keycloak_admin.py` — service-account token (cached) + user create/update/reset-password
+  - [x] `POST /admin/users`, `POST /admin/users/{id}/reset-password`, `GET /admin/users/{id}/access`; KC sync on PATCH/DELETE
+  - [x] Realm: `zmetrics-backend` service account granted `realm-management` roles; `KC_CLIENT_SECRET` wired
+  - [x] Safety: admin-gated, temp-pw once / never stored or logged, no `keycloak_sub` leakage, AuditLog, savepoint orphan-rollback
+  - [x] 78 backend tests (executor-local) + curator code review. ⚠ Activate: rebuild backend + fix `.env` (see STATUS Deploy notes)
+- [ ] **ADMIN-USERS-2** (UI) — реализуется как экран «Администрирование» в DESKTOP-1;
+      функциональная спека (поля, flows, ошибки) остаётся актуальной:
+      `docs/handoffs/2026-06-09-TASK-admin-users-2-frontend.md`
+  - [ ] User list, create, edit (ФИО/email/активность), reset-password, per-quarry roles
+
+### ADMIN-AUDIT — Audit-log viewer · `desktop/` *(ex-WEB-3)*
+*Remainder after ADMIN-USERS. Low urgency.*
+
+- [ ] Audit log table: `GET /api/v1/admin/audit-logs` (paginated, admin only)
 
 ---
 
 ## BLOCKED (requires ZED 2 hardware)
 
-### M2 — Real CV Stereo (≈8 weeks after hardware)
-- [ ] OpenCV stereo calibration step (replace mock `StereoCalibrationStep`)
-- [ ] Stereo rectification (replace mock)
-- [ ] StereoSGBM depth estimation (replace mock)
-- [ ] Open3D point cloud generation (replace mock)
-- [ ] Calibration import from ZED SDK `.conf` file
+### M2 — Real CV Stereo — implementation done, validation blocked
+*Код шагов готов (M2-STEREO, см. DONE): `cv_calibration` / `cv_rectification` /
+`cv_depth` (SGBM) / `cv_pointcloud`, за флагом `ENABLE_REAL_STEREO`. Блокирована
+только проверка на реальной камере.*
+
+- [x] OpenCV stereo calibration step (`cv_calibration.py`)
+- [x] Stereo rectification (`cv_rectification.py`)
+- [x] StereoSGBM depth estimation (`cv_depth.py`)
+- [x] Open3D point cloud generation (`cv_pointcloud.py`)
+- [ ] Calibration import from ZED SDK `.conf` file → записать в `Calibration` по серийнику
+- [ ] E2E validation on real ZED 2 captures (через DESKTOP-1 capture)
 
 ### M3 — Segmentation + Particle Volumes (≈12 weeks, requires training data)
 - [x] SAM3 segmentation step — text-prompted instance segmentation (`Sam3SegmentationStep`)
@@ -219,19 +293,21 @@ Bug hunts are periodic code-review tasks run by an executor agent (no UI needed)
 - [ ] Training data collection and labeling pipeline
 - [ ] Particle mask → 3D volume projection
 - [ ] Granulometry from real particle measurements
-- [ ] Report PDF generation (WeasyPrint) — web download button already wired to export endpoint
+- [ ] Report PDF generation (WeasyPrint) — export endpoint уже есть; кнопка скачивания → desktop
 - [ ] Ground truth validation (sieve analysis comparison)
 
 ---
 
 ## M6+ — Production & Scale
 
-- [ ] ZED SDK direct USB integration (replace Camera2 placeholder)
+- [ ] ZED SDK (`pyzed`) on the capture PC — optional local neural depth / quality preview
+      (десктоп сейчас работает с ZED как UVC; SDK не требуется, пока CV на сервере)
 - [ ] Multi-quarry SaaS deployment (tenant isolation, billing)
 - [ ] PostGIS for quarry/section geospatial boundaries
 - [ ] MLOps: model versioning, retraining pipeline, dataset management
 - [ ] DVC / Git LFS for training datasets and model weights
 - [ ] Replace worker `db_models.py` hand-sync with shared package import
 - [ ] Keycloak user deactivation sync (revoked access not propagated on JWT refresh)
-- [ ] Web: real-time job status via WebSocket (currently no live updates in web)
-- [ ] Mobile: push notifications for completed analysis jobs
+- [ ] Desktop: real-time job status via WebSocket (сейчас — поллинг)
+- [ ] Android companion app (просмотр отчётов / съёмка камерой телефона — НЕ ZED-захват;
+      см. обоснование пивота)
