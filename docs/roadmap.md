@@ -194,15 +194,49 @@ Bug hunts are periodic code-review tasks run by an executor agent (no UI needed)
       *(код готов; остаётся E2E на железе с `ENABLE_REAL_STEREO=true`)*
 - [x] Offline queue wired to ApiClient: `SyncProcessor` (реестр хендлеров по `kind`,
       ApiError → попытка ×5, обрыв сети → стоп без попытки) + статус-бар с QTimer 30s
-- [ ] Screens: login, dashboard, карьеры, участки, паспорта (+статусы, взрыв), capture+анализ,
-      отчёты (Rosin-Rammler, JSON export, mock badge), рекомендации (read-only suggestions),
-      админка (ADMIN-USERS-2 спека → desktop)
+- [x] Dashboard screen: селектор карьера, карточки (карьеры/участки/отчёты/P80),
+      гистограмма фракций (QPainter), последние отчёты с mock-бейджем; DTO-слой +
+      типизированный `ZMetricsApi` (зеркало api.ts) — 57 tests green
+
+**Юзертесты (UT-D\*):** Claude пишет в чат пошаговые действия → Никита выполняет на
+живом приложении и отписывается, где баги. Чекпоинты стоят после блоков, где ручная
+проверка реально нужна (auth/UI-поведение/железо — то, что юнит-тесты не ловят).
+
+- [ ] **UT-D1 — smoke того, что уже есть:** запуск `python -m zmetrics_desktop`,
+      OIDC-логин через браузер (+ повторный запуск без логина — токен из keyring),
+      выход, статус-бар Онлайн/Оффлайн (стоп backend → ⚠ Оффлайн), дашборд на
+      dev-seed данных (карточки, гистограмма, mock-бейдж)
+- [ ] Screens: карьеры + участки (list/create)
+- [ ] Screens: паспорта (list/detail/create, переходы статусов кнопками, взрыв);
+      ролевой гейтинг кнопок по `/access` (`user<surveyor<blaster<admin`)
+- [ ] **UT-D2 — CRUD и workflow паспорта:** создать карьер → участок → паспорт →
+      Submit → Approve → Activate → взрыв; проверить, что под ролью `user` кнопки
+      записи скрыты/задизейблены, а API всё равно отдаёт 403 при прямом вызове
+- [ ] Screens: съёмка + анализ (превью камеры, capture → upload → job polling → P80);
+      оффлайн-постановка в очередь через SyncManager
+- [ ] **UT-D3 — capture E2E на веб-камере ноутбука (без ZED, без GPU):** снять кадр →
+      моно-режим (только left_frame) → mock-пайплайн (`ENABLE_SAM3=false`) → P80 в UI;
+      оффлайн-сценарий: стоп backend → снять кадр → очередь в статус-баре → старт
+      backend → автослив ≤30 c, без дублей
+- [ ] Screens: отчёты (Rosin-Rammler кривая, JSON export, mock badge) + рекомендации
+      (read-only suggestions, Принять/Отклонить/Ознакомлен)
+- [ ] **UT-D4 — отчёты и рекомендации** *(совмещён с UT-2 ниже — выполнить его
+      чек-лист через десктоп)*: бейдж «⚠ Синтетические данные», экспорт JSON,
+      suggestions нередактируемы, статус меняется только кнопками
+- [ ] Screens: админка (ADMIN-USERS-2 спека → desktop)
+- [ ] **UT-D5 — админка и роли:** выдать/отозвать доступ к карьеру, сменить роль;
+      отозванный пользователь теряет карьер из списка; AuditLog пишется
 - [ ] SAM3 artifact metadata в панели завершённого job + `rock-sample.png` smoke без камеры
       *(перенесено из WEB-ANALYSIS-2)*
 - [ ] Remove `frontend/` + `mobile/`; drop `frontend` service from compose; prune
       `zmetrics-web`/`zmetrics-mobile` Keycloak clients
 - [ ] PyInstaller build (+ опц. инсталлятор); backend URL на первом запуске
+- [ ] **UT-D6 — сборка:** поставить .exe на чистую Windows (без Python/venv),
+      подключиться к backend, пройти логин и один capture-цикл
 - [ ] Docs: STATUS/roadmap reconcile + handoff
+
+*Позже, при наличии железа: UT-D7 — ZED 2 по USB (SBS-режимы, left/right split) и
+`ENABLE_REAL_STEREO=true` — уже учтён в M2 (BLOCKED) ниже.*
 
 ---
 
