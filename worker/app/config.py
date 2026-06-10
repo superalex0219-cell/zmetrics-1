@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,10 +21,22 @@ class WorkerSettings(BaseSettings):
 
     worker_concurrency: int = 2
 
-    # SAM3 segmentation model
-    sam3_model_path: str = "bodhicitta/sam3"  # HuggingFace ID or absolute path to local weights
+    # SAM3 segmentation model. In Docker this is mounted from SAM3_WEIGHTS_DIR.
+    # Off by default: real inference needs a GPU; without it the mock segmentation
+    # step runs instead (same artifact contract).
+    enable_sam3: bool = Field(default=False, alias="ENABLE_SAM3")
+    sam3_model_path: str = "/models/sam3"  # local path, or set to a HuggingFace ID
     sam3_text_prompt: str = "rock fragment"  # open-vocab prompt for quarry blast muck
     sam3_confidence_threshold: float = 0.5   # post_process_instance_segmentation threshold
+
+    enable_real_stereo: bool = Field(default=False, alias="ENABLE_REAL_STEREO")
+
+    # --- LLM explanation layer (M5-b) ---
+    enable_llm_recommendations: bool = Field(default=False, alias="ENABLE_LLM_RECOMMENDATIONS")
+    anthropic_api_key: str | None = Field(default=None, alias="ANTHROPIC_API_KEY")
+    llm_model: str = Field(default="claude-sonnet-4-6", alias="LLM_MODEL")
+    llm_timeout_s: float = Field(default=20.0, alias="LLM_TIMEOUT_S")
+    llm_max_tokens: int = Field(default=512, alias="LLM_MAX_TOKENS")
 
 
 @lru_cache

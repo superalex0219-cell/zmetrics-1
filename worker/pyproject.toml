@@ -18,14 +18,19 @@ dependencies = [
     "structlog>=24.1.0",
     "numpy>=1.26.0",
     "scipy>=1.13.0",
+    "anthropic>=0.40",
 ]
 
 [project.optional-dependencies]
 sam3 = [
-    "torch>=2.3.0",
-    "transformers>=4.47.0",
+    "torch>=2.8.0,<3.0",
+    "torchvision>=0.23.0,<0.27.0",
+    "transformers>=5.10.0,<5.11.0",
     "Pillow>=10.3.0",
     "opencv-python-headless>=4.9.0",
+]
+stereo = [
+    "opencv-python-headless>=4.10",
 ]
 cv = [
     "opencv-python-headless>=4.9.0",

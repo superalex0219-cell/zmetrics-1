@@ -30,6 +30,7 @@ async def _run_pipeline_async(job_id: UUID) -> dict:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
     from app.config import get_settings
+    from app.db_models import JobStatus
     from app.pipeline.interfaces import Pipeline, PipelineContext, PipelineStepError
     from app.pipeline.mock_calibration import MockCalibrationStep
     from app.pipeline.mock_depth import MockDepthStep
@@ -37,7 +38,7 @@ async def _run_pipeline_async(job_id: UUID) -> dict:
     from app.pipeline.mock_particles import MockParticleVolumeStep
     from app.pipeline.mock_pointcloud import MockPointCloudStep
     from app.pipeline.mock_rectification import MockRectificationStep
-    from app.pipeline.sam3_segmentation import Sam3SegmentationStep
+    from app.pipeline.mock_segmentation import MockSegmentationStep
 
     settings = get_settings()
 
@@ -55,7 +56,7 @@ async def _run_pipeline_async(job_id: UUID) -> dict:
             return {"status": "already_completed"}
 
         # Mark as running
-        job.status = _JobStatus("running")
+        job.status = JobStatus("running")
         job.started_at = datetime.now(tz=timezone.utc)
         await db.commit()
 
@@ -76,16 +77,41 @@ async def _run_pipeline_async(job_id: UUID) -> dict:
             bucket_artifacts=settings.minio_bucket_artifacts,
         )
 
-        pipeline = Pipeline([
-            MockCalibrationStep(),
-            MockRectificationStep(),
-            MockDepthStep(),
-            MockPointCloudStep(),
-            Sam3SegmentationStep(
+        # Determine whether to use real stereo CV steps
+        use_real_stereo = settings.enable_real_stereo and await _has_right_frame(db, job.capture_session_id)
+
+        if use_real_stereo:
+            from app.pipeline.cv_calibration import CVCalibrationStep
+            from app.pipeline.cv_rectification import CVRectificationStep
+            from app.pipeline.cv_depth import CVStereoDepthStep
+            from app.pipeline.cv_pointcloud import CVPointCloudStep
+            calibration_step = CVCalibrationStep()
+            rectification_step = CVRectificationStep()
+            depth_step = CVStereoDepthStep()
+            pointcloud_step = CVPointCloudStep()
+        else:
+            calibration_step = MockCalibrationStep()
+            rectification_step = MockRectificationStep()
+            depth_step = MockDepthStep()
+            pointcloud_step = MockPointCloudStep()
+
+        # SAM3 needs a GPU — behind its own flag, mock segmentation otherwise
+        if settings.enable_sam3:
+            from app.pipeline.sam3_segmentation import Sam3SegmentationStep
+            segmentation_step = Sam3SegmentationStep(
                 model_path=settings.sam3_model_path,
                 text_prompt=settings.sam3_text_prompt,
                 threshold=settings.sam3_confidence_threshold,
-            ),
+            )
+        else:
+            segmentation_step = MockSegmentationStep()
+
+        pipeline = Pipeline([
+            calibration_step,
+            rectification_step,
+            depth_step,
+            pointcloud_step,
+            segmentation_step,
             MockParticleVolumeStep(),
             MockGranulometryStep(),
         ])
@@ -106,7 +132,7 @@ async def _run_pipeline_async(job_id: UUID) -> dict:
                 ]
             }
 
-            job.status = _JobStatus("completed")
+            job.status = JobStatus("completed")
             job.completed_at = datetime.now(tz=timezone.utc)
             job.pipeline_log = pipeline_log
 
@@ -117,7 +143,7 @@ async def _run_pipeline_async(job_id: UUID) -> dict:
             return {"status": "completed", "job_id": str(job_id)}
 
         except PipelineStepError as exc:
-            job.status = _JobStatus("failed")
+            job.status = JobStatus("failed")
             job.error_message = str(exc)
             job.pipeline_log = {"failed_step": exc.step_name, "error": str(exc)}
             await db.commit()
@@ -125,7 +151,7 @@ async def _run_pipeline_async(job_id: UUID) -> dict:
             return {"status": "failed", "step": exc.step_name, "error": str(exc)}
 
         except Exception as exc:
-            job.status = _JobStatus("failed")
+            job.status = JobStatus("failed")
             job.error_message = str(exc)
             await db.commit()
             logger.error("pipeline_unexpected_error", job_id=str(job_id), error=str(exc))
@@ -149,6 +175,19 @@ async def _load_job(db, job_id: UUID):
         return None
 
 
+async def _has_right_frame(db, capture_session_id: UUID) -> bool:
+    """Check if capture session has a right_frame artifact."""
+    from sqlalchemy import select
+    from app.db_models import Artifact, ArtifactType
+    result = await db.execute(
+        select(Artifact).where(
+            Artifact.capture_session_id == capture_session_id,
+            Artifact.artifact_type == ArtifactType.RIGHT_FRAME,
+        ).limit(1)
+    )
+    return result.scalar_one_or_none() is not None
+
+
 async def _create_report_and_recommendation(
     db,
     job_id: UUID,
@@ -169,6 +208,8 @@ async def _create_report_and_recommendation(
         RecommendationStatus,
         Report,
     )
+    from app.config import get_settings
+    from app.llm import enhance_recommendation_text
     from app.rules import evaluate_fragmentation
 
     # Get AnalysisResult created by granulometry step
@@ -227,12 +268,25 @@ async def _create_report_and_recommendation(
         p50_mm=p50,
     )
 
+    # Optional LLM-enhanced prose. Falls back to the deterministic rule text on
+    # any failure / when disabled. Badge + footer are guaranteed by the enhancer.
+    final_text = enhance_recommendation_text(
+        rule_result=rule_result,
+        p10_mm=p10,
+        p50_mm=p50,
+        p80_mm=p80,
+        confidence_score=conf,
+        target_p80_mm=target_p80_mm,
+        settings=get_settings(),
+    )
+
     # SAFETY: always REQUIRES_HUMAN_REVIEW — never auto-accept.
+    # parameter_suggestions stays exactly what the rule engine produced — never from LLM.
     recommendation = Recommendation(
         report_id=report.id,
         generated_by_id=session.captured_by_id,
         status=RecommendationStatus.REQUIRES_HUMAN_REVIEW,
-        recommendation_text=rule_result.recommendation_text,
+        recommendation_text=final_text,
         parameter_suggestions=rule_result.parameter_suggestions,
     )
     db.add(recommendation)
@@ -254,14 +308,3 @@ async def _create_report_and_recommendation(
     )
 
 
-class _JobStatus:
-    """Simple wrapper to allow setting job.status from string in a duck-typed way."""
-    def __init__(self, value: str):
-        self.value = value
-
-    def __eq__(self, other):
-        if isinstance(other, str):
-            return self.value == other
-        if isinstance(other, _JobStatus):
-            return self.value == other.value
-        return self.value == getattr(other, "value", None)

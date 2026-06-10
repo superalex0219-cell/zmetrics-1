@@ -34,6 +34,21 @@ _sam3_processor: Any = None
 _sam3_model: Any = None
 _sam3_device: str | None = None
 
+_SAM3_REQUIRED_TORCH_ATTR = "float8_e8m0fnu"
+
+
+def _validate_sam3_runtime(torch_module: Any) -> None:
+    """Fail early with a clear message for torch/transformers version mismatches."""
+    if hasattr(torch_module, _SAM3_REQUIRED_TORCH_ATTR):
+        return
+
+    version = getattr(torch_module, "__version__", "unknown")
+    raise RuntimeError(
+        "SAM3 requires a newer PyTorch runtime: torch."
+        f"{_SAM3_REQUIRED_TORCH_ATTR} is missing in torch {version}. "
+        "Rebuild the worker image with the pinned SAM3 dependencies."
+    )
+
 
 def _ensure_model_loaded(model_path: str) -> tuple[Any, Any, str]:
     global _sam3_processor, _sam3_model, _sam3_device
@@ -46,6 +61,9 @@ def _ensure_model_loaded(model_path: str) -> tuple[Any, Any, str]:
             return _sam3_processor, _sam3_model, _sam3_device
 
         import torch
+
+        _validate_sam3_runtime(torch)
+
         from transformers import Sam3Model, Sam3Processor
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -95,14 +113,14 @@ async def _fetch_left_frame(ctx: PipelineContext) -> "PILImage.Image | None":
 
     try:
         resp = ctx.storage_client.get_object(
-            Bucket=ctx.bucket_frames, Key=artifact.minio_key
+            Bucket=artifact.storage_bucket, Key=artifact.storage_key
         )
         image_bytes = resp["Body"].read()
         return Image.open(io.BytesIO(image_bytes)).convert("RGB")
     except Exception as exc:
         logger.warning(
             "sam3_frame_download_failed",
-            extra={"minio_key": artifact.minio_key, "error": str(exc)},
+            extra={"storage_key": artifact.storage_key, "error": str(exc)},
         )
         return None
 

@@ -74,6 +74,26 @@ class CaptureSession(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     blast_event_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     captured_by_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    calibration_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    device_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+
+
+class Calibration(Base):
+    """Read-only stub: worker reads calibration matrices for real stereo CV steps."""
+    __tablename__ = "calibration"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    device_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    left_camera_matrix: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    right_camera_matrix: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    left_dist_coeffs: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    right_dist_coeffs: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    rotation_matrix: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    translation_vector: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    baseline_mm: Mapped[float] = mapped_column(Numeric(8, 3), nullable=False)
+    image_width_px: Mapped[int] = mapped_column(Integer, nullable=False)
+    image_height_px: Mapped[int] = mapped_column(Integer, nullable=False)
+    is_active: Mapped[bool] = mapped_column(nullable=False, default=True)
 
 
 class BlastEvent(Base):
@@ -103,7 +123,7 @@ class ArtifactType(str, enum.Enum):
 
 
 class Artifact(Base):
-    """Read-only stub: worker reads left_frame minio_key for SAM3 segmentation."""
+    """Read-only stub: worker reads frames for pipeline steps."""
     __tablename__ = "artifact"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
@@ -111,7 +131,8 @@ class Artifact(Base):
     artifact_type: Mapped[ArtifactType] = mapped_column(
         SAEnum(ArtifactType, name="artifact_type", create_type=False), nullable=False
     )
-    minio_key: Mapped[str] = mapped_column(String(1000), nullable=False)
+    storage_bucket: Mapped[str] = mapped_column(String(255), nullable=False)
+    storage_key: Mapped[str] = mapped_column(String(1024), nullable=False)
     frame_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 

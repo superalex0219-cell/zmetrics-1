@@ -8,13 +8,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Torch with CUDA 12.1 in a separate layer so Docker caches it across code changes
+# Torch in a separate layer so Docker caches it across code changes.
+# SAM3 via transformers 5.10 requires newer torch float8 dtypes that are absent in torch 2.5/cu121.
 RUN pip install --no-cache-dir \
-    "torch>=2.3.0" \
-    --index-url https://download.pytorch.org/whl/cu121
+    "torch==2.11.0+cu128" \
+    --index-url https://download.pytorch.org/whl/cu128
+
+RUN pip install --no-cache-dir \
+    "torchvision==0.26.0+cu128" \
+    --index-url https://download.pytorch.org/whl/cu128
 
 COPY pyproject.toml .
-RUN pip install --no-cache-dir --upgrade pip setuptools \
+RUN pip install --no-cache-dir --upgrade pip "setuptools<82" \
     && pip install --no-cache-dir ".[sam3]"
 
 COPY . .
