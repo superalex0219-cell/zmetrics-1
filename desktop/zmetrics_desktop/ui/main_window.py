@@ -1,9 +1,9 @@
 """Main window: side-menu navigation + a stacked page area.
 
-Scaffold shell — each screen is a placeholder for now. Screens are filled in as they are
-ported (dashboard, quarries, sections, passports, capture, reports, recommendations,
-admin). Login runs through the toolbar action: the blocking PKCE browser round-trip is
-executed on QThreadPool, never on the UI thread.
+Login — форма логин/пароль прямо в приложении (direct access grant против публичного
+клиента ``zmetrics-desktop``); браузер не открывается. Блокирующий запрос токена
+выполняется на QThreadPool, никогда на UI-потоке. Пароль не сохраняется — в keyring
+живут только токены.
 """
 from __future__ import annotations
 
@@ -11,8 +11,12 @@ from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, QTimer, Signal
 from PySide6.QtWidgets import (
+    QDialog,
+    QDialogButtonBox,
+    QFormLayout,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QListWidget,
     QMainWindow,
     QMessageBox,
@@ -49,25 +53,58 @@ def _placeholder(title: str) -> QWidget:
     return page
 
 
+class _LoginDialog(QDialog):
+    """Форма логина в приложении — без браузера."""
+
+    def __init__(self, parent: QWidget | None = None, username: str = "") -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Вход в ZMetrics")
+        self.setModal(True)
+        form = QFormLayout(self)
+        self._username = QLineEdit(username)
+        self._username.setPlaceholderText("логин")
+        self._password = QLineEdit()
+        self._password.setEchoMode(QLineEdit.EchoMode.Password)
+        self._password.setPlaceholderText("пароль")
+        form.addRow("Логин:", self._username)
+        form.addRow("Пароль:", self._password)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("Войти")
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText("Отмена")
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        form.addRow(buttons)
+        (self._password if username else self._username).setFocus()
+
+    def credentials(self) -> tuple[str, str]:
+        return self._username.text().strip(), self._password.text()
+
+
 class _LoginWorker(QRunnable):
-    """Runs the blocking PKCE login off the UI thread."""
+    """Runs the blocking password-grant login off the UI thread."""
 
     class Signals(QObject):
         succeeded = Signal()
         failed = Signal(str)
 
-    def __init__(self, context: AppContext) -> None:
+    def __init__(self, context: AppContext, username: str, password: str) -> None:
         super().__init__()
         self._context = context
+        self._username = username
+        self._password = password
         self.signals = self.Signals()
 
     def run(self) -> None:
         try:
-            self._context.auth.login()
+            self._context.auth.login_password(self._username, self._password)
         except Exception as exc:  # AuthError or network failure
             self.signals.failed.emit(str(exc))
         else:
             self.signals.succeeded.emit()
+        finally:
+            self._password = ""  # не держим пароль в памяти дольше необходимого
 
 
 class _SyncWorker(QRunnable):
@@ -110,6 +147,7 @@ class MainWindow(QMainWindow):
 
         self._state = AppState()
         self._access_retry_count = 0
+        self._last_username = ""
         self._state.access_refresh_requested.connect(self._load_access)
 
         self._stack = QStackedWidget()
@@ -192,8 +230,15 @@ class MainWindow(QMainWindow):
 
     def _start_login(self) -> None:
         assert self._context is not None
+        dialog = _LoginDialog(self, username=self._last_username)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        username, password = dialog.credentials()
+        if not username or not password:
+            return
+        self._last_username = username  # удобство повторного входа; пароль не храним
         self._login_action.setEnabled(False)
-        worker = _LoginWorker(self._context)
+        worker = _LoginWorker(self._context, username, password)
         worker.signals.succeeded.connect(self._on_login_done)
         worker.signals.failed.connect(self._on_login_failed)
         self._login_worker = worker  # keep alive until the queued signal is delivered

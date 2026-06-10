@@ -303,9 +303,11 @@ Bug hunts are periodic code-review tasks run by an executor agent (no UI needed)
 - [ ] Оффлайн: серия уходит в SyncManager одной составной операцией
 
 ### AUTH-2 — Токены на рабочую смену · `infra/` + `desktop/`
-*Сейчас: OIDC PKCE + keyring + refresh-on-401 (однократный) уже работают.
-Боль: SSO-сессия истекает в середине смены и требует браузерного релогина.*
+*Сейчас: keyring + refresh-on-401 (однократный) уже работают.*
 
+- [x] **Логин формой в приложении, без браузера** (решение 2026-06-11): direct access
+      grant против `zmetrics-desktop`, диалог логин/пароль в `main_window`, пароль
+      не сохраняется; PKCE-браузерный флоу остаётся в коде как альтернатива
 - [ ] Realm: `accessTokenLifespan` ~15 мин (короткий access — норм), но
       `ssoSessionIdleTimeout`/`ssoSessionMaxLifespan` ≥ 12 ч — refresh живёт всю смену
       (обновить realm-export.json + kcadm на живом realm)

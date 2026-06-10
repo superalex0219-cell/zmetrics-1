@@ -10,10 +10,14 @@ These rules apply to all code in the project.
 - Role checks MUST be per-quarry (via `QuarryUserAccess`), not global
 - Revoked access (`revoked_at IS NOT NULL`) MUST be treated as no access
 
-## Desktop client auth (OIDC PKCE)
+## Desktop client auth
 
-- The desktop client uses OIDC Authorization Code + PKCE with a **loopback redirect**
-  (`http://localhost:<port>/callback`) against the public Keycloak client `zmetrics-desktop`
+- **Primary flow (product decision 2026-06-11): in-app login form → direct access
+  grant** (`grant_type=password`) against the public Keycloak client `zmetrics-desktop`
+  (`directAccessGrantsEnabled=true`). No browser. The password goes only to the
+  Keycloak token endpoint and is NEVER stored, logged, or kept beyond the request.
+- The PKCE-loopback browser flow (`AuthManager.login`) remains in the codebase as an
+  alternative for environments where ROPC is disabled — do not delete it.
 - Never embed a client secret in the desktop app (public client)
 - Tokens stored in the OS keyring (Windows Credential Manager) — never plaintext, never logged
 - Refresh on 401, retry once

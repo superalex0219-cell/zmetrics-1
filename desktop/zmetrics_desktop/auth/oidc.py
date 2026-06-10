@@ -128,6 +128,39 @@ def exchange_code(
             client.close()
 
 
+def password_grant(
+    endpoints: OidcEndpoints,
+    client_id: str,
+    username: str,
+    password: str,
+    http: httpx.Client | None = None,
+) -> Tokens:
+    """Direct access grant — логин формой внутри приложения, без браузера.
+
+    Пароль уходит только на token endpoint Keycloak и нигде не сохраняется;
+    в keyring попадают только токены.
+    """
+    data = {
+        "grant_type": "password",
+        "client_id": client_id,
+        "username": username,
+        "password": password,
+        "scope": "openid profile email",
+    }
+    client = http or httpx.Client(timeout=30.0)
+    try:
+        resp = client.post(endpoints.token_url, data=data)
+    except httpx.HTTPError as exc:
+        raise AuthError(f"Сервер авторизации недоступен: {type(exc).__name__}")
+    finally:
+        if http is None:
+            client.close()
+    if resp.status_code in (400, 401):
+        # invalid_grant / invalid creds — не включаем тело ответа в сообщение
+        raise AuthError("Неверный логин или пароль")
+    return _tokens_from_response(resp)
+
+
 def refresh_tokens(
     endpoints: OidcEndpoints,
     client_id: str,
@@ -252,6 +285,17 @@ class AuthManager:
             result.code,
             pkce.verifier,
             server.redirect_uri,
+        )
+        self._store.save(tokens)
+        return tokens
+
+    def login_password(self, username: str, password: str) -> Tokens:
+        """Логин формой в приложении (direct access grant). Blocking — run off the UI thread."""
+        tokens = password_grant(
+            self._endpoints,
+            self._settings.keycloak_client_id,
+            username,
+            password,
         )
         self._store.save(tokens)
         return tokens

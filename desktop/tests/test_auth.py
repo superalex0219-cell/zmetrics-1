@@ -214,3 +214,54 @@ def test_loopback_server_times_out():
     server = _LoopbackServer()
     with pytest.raises(AuthError, match="Timed out"):
         server.wait_for_callback(timeout_s=0.3)
+
+
+# --- Password grant (форма логина в приложении, без браузера) -------------------------
+
+
+def _password_http(handler) -> httpx.Client:
+    return httpx.Client(transport=httpx.MockTransport(handler))
+
+
+def test_password_grant_returns_tokens():
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = request.read().decode()
+        assert "grant_type=password" in body
+        assert "username=admin-user" in body
+        assert "client_id=zmetrics-desktop" in body
+        return httpx.Response(200, json={"access_token": "at-1", "refresh_token": "rt-1"})
+
+    from zmetrics_desktop.auth.oidc import password_grant
+
+    tokens = password_grant(
+        _endpoints(), "zmetrics-desktop", "admin-user", "changeme",
+        http=_password_http(handler),
+    )
+    assert tokens.access_token == "at-1"
+    assert tokens.refresh_token == "rt-1"
+
+
+def test_password_grant_invalid_credentials_friendly_error():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(401, json={"error": "invalid_grant"})
+
+    from zmetrics_desktop.auth.oidc import password_grant
+
+    with pytest.raises(AuthError, match="Неверный логин или пароль"):
+        password_grant(
+            _endpoints(), "zmetrics-desktop", "admin-user", "wrong",
+            http=_password_http(handler),
+        )
+
+
+def test_login_password_stores_tokens(monkeypatch):
+    store = InMemoryTokenStore()
+    manager = AuthManager(Settings(), token_store=store)
+
+    def fake_grant(endpoints, client_id, username, password, http=None):
+        assert username == "admin-user"
+        return Tokens(access_token="at-2", refresh_token="rt-2")
+
+    monkeypatch.setattr("zmetrics_desktop.auth.oidc.password_grant", fake_grant)
+    manager.login_password("admin-user", "changeme")
+    assert store.access_token() == "at-2"

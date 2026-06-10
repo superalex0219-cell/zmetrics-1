@@ -1,9 +1,11 @@
-"""Authentication: OIDC Authorization Code + PKCE via loopback redirect.
+"""Authentication against the public Keycloak client ``zmetrics-desktop``.
 
-Interactive login opens the system browser against the public Keycloak client
-``zmetrics-desktop`` (no embedded secret) and catches the redirect on a loopback HTTP
-server. Tokens live in the OS keyring (Windows Credential Manager) — never plaintext,
-never logged.
+Primary flow (product decision 2026-06-11): in-app login form → direct access
+grant (``AuthManager.login_password``) — браузер не открывается; пароль уходит
+только на token endpoint Keycloak и нигде не сохраняется. The PKCE-loopback
+browser flow (``AuthManager.login``) is kept as an alternative for environments
+where ROPC is disabled. Tokens live in the OS keyring (Windows Credential
+Manager) — never plaintext, never logged.
 """
 from zmetrics_desktop.auth.oidc import AuthError, AuthManager
 from zmetrics_desktop.auth.token_store import Tokens, TokenStore
