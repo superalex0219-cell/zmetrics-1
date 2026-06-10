@@ -4,9 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.roles import RoleLevel, require_any_admin, require_quarry_role
+from app.auth.roles import RoleLevel, require_quarry_role
+from app.db.models.audit import AuditLog
 from app.db.models.quarry import Quarry, SiteSection
-from app.db.models.user import UserProfile
+from app.db.models.user import QuarryUserAccess, Role, UserProfile
 from app.db.session import get_db
 from app.dependencies import get_current_user
 from app.schemas.common import PaginatedResponse
@@ -43,12 +44,67 @@ async def list_quarries(
 @router.post("", response_model=QuarryRead, status_code=status.HTTP_201_CREATED)
 async def create_quarry(
     body: QuarryCreate,
-    current_user: UserProfile = Depends(require_any_admin),
+    current_user: UserProfile = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Quarry:
+    active_quarries = (
+        await db.execute(
+            select(func.count()).select_from(Quarry).where(Quarry.deleted_at.is_(None))
+        )
+    ).scalar_one()
+    admin_access = (
+        await db.execute(
+            select(QuarryUserAccess.id)
+            .join(Role, Role.id == QuarryUserAccess.role_id)
+            .where(
+                QuarryUserAccess.user_id == current_user.id,
+                QuarryUserAccess.revoked_at.is_(None),
+                Role.level >= RoleLevel.ADMIN.value,
+            )
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+
+    if active_quarries > 0 and admin_access is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+
     quarry = Quarry(**body.model_dump())
     db.add(quarry)
     await db.flush()
+
+    admin_role = (await db.execute(select(Role).where(Role.name == "admin"))).scalar_one_or_none()
+    if admin_role is None:
+        admin_role = Role(name="admin", level=RoleLevel.ADMIN.value)
+        db.add(admin_role)
+        await db.flush()
+
+    access = QuarryUserAccess(
+        user_id=current_user.id,
+        quarry_id=quarry.id,
+        role_id=admin_role.id,
+        granted_by_id=current_user.id,
+    )
+    db.add(access)
+    await db.flush()
+
+    db.add(
+        AuditLog(
+            actor_id=current_user.id,
+            entity_type="quarry",
+            entity_id=quarry.id,
+            action="quarry_created",
+            new_value=body.model_dump(),
+        )
+    )
+    db.add(
+        AuditLog(
+            actor_id=current_user.id,
+            entity_type="quarry_user_access",
+            entity_id=access.id,
+            action="role_assigned",
+            new_value={"role": "admin", "quarry_id": str(quarry.id)},
+        )
+    )
     return quarry
 
 
