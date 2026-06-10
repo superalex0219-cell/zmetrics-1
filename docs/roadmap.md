@@ -214,8 +214,9 @@ Bug hunts are periodic code-review tasks run by an executor agent (no UI needed)
 - [ ] **UT-D2 — CRUD и workflow паспорта:** создать карьер → участок → паспорт →
       Submit → Approve → Activate → взрыв; проверить, что под ролью `user` кнопки
       записи скрыты/задизейблены, а API всё равно отдаёт 403 при прямом вызове
-- [ ] Screens: съёмка + анализ (превью камеры, capture → upload → job polling → P80);
-      оффлайн-постановка в очередь через SyncManager
+- [x] Screens: съёмка + анализ (превью камеры, capture → upload → job polling → P80);
+      оффлайн: кадры на диск + составной `capture_upload` в очереди SyncManager;
+      кнопка-хелпер «тестовое устройство» (веб-камера + калибровка-заглушка) — 95 tests
 - [ ] **UT-D3 — capture E2E на веб-камере ноутбука (без ZED, без GPU):** снять кадр →
       моно-режим (только left_frame) → mock-пайплайн (`ENABLE_SAM3=false`) → P80 в UI;
       оффлайн-сценарий: стоп backend → снять кадр → очередь в статус-баре → старт
