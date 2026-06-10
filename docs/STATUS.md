@@ -1,12 +1,23 @@
 # ZMetrics - STATUS
 
-**Last updated:** 2026-06-11 (rev 13 — CAP-MULTI + AUTH-2 + EDIT-1 реализованы; стек пересобран и работает на новом коде)
-**Git HEAD:** см. git log (коммит сессии rev 13)
+**Last updated:** 2026-06-11 (rev 14 — REPORT-X: экспорт PDF/DOCX/XLSX/CSV/JSON; фикс маркировки mock/real)
+**Git HEAD:** `fa66941`
 
 ---
 
 ## TL;DR для следующей сессии
 
+-1. **REPORT-X сделан (сессия rev 14, `fa66941`):** `GET /reports/{id}/export?format=
+   pdf|docx|xlsx|csv|json`; рендеры в `backend/app/services/report_export.py`
+   (WeasyPrint+jinja2 / python-docx / openpyxl / csv); файл также кладётся в MinIO
+   `reports/{id}/` (часть STORE-1). Worker: шаг `report_visuals` (оверлей масок +
+   цветная depth-карта PNG, никогда не валит джоб). Desktop: выбор формата +
+   «Экспорт…» (blaster+). Живой смоук: все 5 форматов на реальном отчёте, PDF
+   с кириллицей и снимком. **Фикс маркировки:** реальный CV-контур теперь
+   регистрирует ModelVersion (model_type=cv, тег sam3+igev) на джобе — отчёты
+   больше не помечаются mock'ом; бейдж rules/llm зависит от метода
+   (REAL_CV_BADGE/MOCK_BADGE). Старые отчёты сохраняют старый текст.
+   Остаток бэклога: CAM-CUSTOM → UI-2; M5-d — исследовательская ветка.
 0. **Сессия 2026-06-11, часть 3 — закрыты три задачи продуктового бэклога:**
    - **CAP-MULTI** (серия фото к взрыву): `AnalysisJob.frame_index` + миграция
      `75bb00d854b1` (применена); job анализирует свою пару, артефакты пары N>0 —
