@@ -155,6 +155,10 @@ class MainWindow(QMainWindow):
             from zmetrics_desktop.ui.reports import ReportsScreen
 
             return ReportsScreen(self._context, self._state)
+        if nav_label == "Рекомендации":
+            from zmetrics_desktop.ui.recommendations import RecommendationsScreen
+
+            return RecommendationsScreen(self._context, self._state)
         return _placeholder(title)
 
     # --- Auth toolbar -----------------------------------------------------------
