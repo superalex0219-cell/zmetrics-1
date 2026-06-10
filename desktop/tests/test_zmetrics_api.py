@@ -29,6 +29,18 @@ def _paginated(items: list[dict]) -> dict:
     return {"items": items, "total": len(items), "page": 1, "page_size": 50}
 
 
+def test_get_my_access_uses_me_route():
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/v1/me/access"
+        return httpx.Response(200, json=[{
+            "quarry_id": "q1", "quarry_name": "Карьер 1",
+            "role_name": "blaster", "role_level": 3,
+        }])
+
+    entries = _api(handler).get_my_access()
+    assert entries[0].role_level == 3
+
+
 def test_list_quarries_unwraps_pagination():
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path == "/api/v1/quarries"

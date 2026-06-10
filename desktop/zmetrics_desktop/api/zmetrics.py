@@ -47,7 +47,8 @@ class ZMetricsApi:
     def get_my_access(self) -> list[QuarryAccessEntry]:
         """Caller's role per quarry — UI gating only; the backend re-checks every call."""
         return [
-            QuarryAccessEntry.model_validate(item) for item in self._client.get("/access")
+            QuarryAccessEntry.model_validate(item)
+            for item in self._client.get("/me/access")
         ]
 
     # --- Quarries / sections ----------------------------------------------------------
