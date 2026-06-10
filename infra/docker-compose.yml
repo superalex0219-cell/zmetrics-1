@@ -132,6 +132,10 @@ services:
       SAM3_TEXT_PROMPT: ${SAM3_TEXT_PROMPT:-rock fragment}
       SAM3_CONFIDENCE_THRESHOLD: ${SAM3_CONFIDENCE_THRESHOLD:-0.5}
       ENABLE_REAL_STEREO: ${ENABLE_REAL_STEREO:-false}
+      DEPTH_BACKEND: ${DEPTH_BACKEND:-sgbm}
+      IGEV_CKPT_PATH: ${IGEV_CKPT_PATH:-/models/igev/igev_plusplus/sceneflow.pth}
+      IGEV_VALID_ITERS: ${IGEV_VALID_ITERS:-16}
+      IGEV_MAX_INFERENCE_WIDTH: ${IGEV_MAX_INFERENCE_WIDTH:-1536}
       ENABLE_LLM_RECOMMENDATIONS: ${ENABLE_LLM_RECOMMENDATIONS:-false}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       LLM_MODEL: ${LLM_MODEL:-claude-sonnet-4-6}
@@ -139,6 +143,7 @@ services:
       LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-512}
     volumes:
       - ${SAM3_WEIGHTS_DIR:-../models/sam3}:/models/sam3:ro
+      - ${IGEV_WEIGHTS_DIR:-./models/igev}:/models/igev:ro
     command: >
       celery -A app.celery_app worker
       --loglevel=info

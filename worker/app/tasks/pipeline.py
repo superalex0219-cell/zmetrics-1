@@ -83,11 +83,19 @@ async def _run_pipeline_async(job_id: UUID) -> dict:
         if use_real_stereo:
             from app.pipeline.cv_calibration import CVCalibrationStep
             from app.pipeline.cv_rectification import CVRectificationStep
-            from app.pipeline.cv_depth import CVStereoDepthStep
             from app.pipeline.cv_pointcloud import CVPointCloudStep
             calibration_step = CVCalibrationStep()
             rectification_step = CVRectificationStep()
-            depth_step = CVStereoDepthStep()
+            if settings.depth_backend == "igev":
+                from app.pipeline.cv_depth_igev import IGEVDepthStep
+                depth_step = IGEVDepthStep(
+                    settings.igev_ckpt_path,
+                    valid_iters=settings.igev_valid_iters,
+                    max_inference_width=settings.igev_max_inference_width,
+                )
+            else:
+                from app.pipeline.cv_depth import CVStereoDepthStep
+                depth_step = CVStereoDepthStep()
             pointcloud_step = CVPointCloudStep()
         else:
             calibration_step = MockCalibrationStep()

@@ -1,7 +1,9 @@
-# Overlay: NVIDIA GPU for the worker (real SAM3 inference).
+# Overlay: NVIDIA GPU for the worker (SAM3 segmentation + IGEV++ stereo depth).
 # Usage:
 #   docker compose -f infra\docker-compose.yml -f infra\docker-compose.gpu.yml up -d
-# Pair with ENABLE_SAM3=true in infra/.env.
+# Pair with ENABLE_SAM3=true in infra/.env; for neural stereo depth additionally
+# ENABLE_REAL_STEREO=true and DEPTH_BACKEND=igev (weights in infra/models/igev,
+# see IGEV_WEIGHTS_DIR / IGEV_CKPT_PATH in docker-compose.yml).
 services:
   worker:
     deploy:

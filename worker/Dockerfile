@@ -20,7 +20,7 @@ RUN pip install --no-cache-dir \
 
 COPY pyproject.toml .
 RUN pip install --no-cache-dir --upgrade pip "setuptools<82" \
-    && pip install --no-cache-dir ".[sam3]"
+    && pip install --no-cache-dir ".[sam3,igev]"
 
 COPY . .
 

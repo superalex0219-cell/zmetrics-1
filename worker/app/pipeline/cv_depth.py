@@ -100,7 +100,9 @@ class CVStereoDepthStep(PipelineStep):
                 duration_seconds=time.monotonic() - t0,
                 metadata={
                     "valid_pixels": valid_pixels,
-                    "median_depth_m": round(median_depth, 3),
+                    # depth units follow the calibration translation units (mm for
+                    # ZED factory calibration, baseline_mm)
+                    "median_depth_mm": round(median_depth, 3),
                     "num_disparities": self.NUM_DISPARITIES,
                     "block_size": self.BLOCK_SIZE,
                 },

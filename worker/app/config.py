@@ -31,6 +31,15 @@ class WorkerSettings(BaseSettings):
 
     enable_real_stereo: bool = Field(default=False, alias="ENABLE_REAL_STEREO")
 
+    # Depth backend for the real stereo path: classical SGBM (CPU) or IGEV++
+    # neural stereo (needs the checkpoint mounted; CUDA strongly recommended).
+    depth_backend: str = Field(default="sgbm", alias="DEPTH_BACKEND")  # "sgbm" | "igev"
+    igev_ckpt_path: str = Field(
+        default="/models/igev/igev_plusplus/sceneflow.pth", alias="IGEV_CKPT_PATH"
+    )
+    igev_valid_iters: int = Field(default=16, alias="IGEV_VALID_ITERS")
+    igev_max_inference_width: int = Field(default=1536, alias="IGEV_MAX_INFERENCE_WIDTH")
+
     # --- LLM explanation layer (M5-b) ---
     enable_llm_recommendations: bool = Field(default=False, alias="ENABLE_LLM_RECOMMENDATIONS")
     anthropic_api_key: str | None = Field(default=None, alias="ANTHROPIC_API_KEY")
