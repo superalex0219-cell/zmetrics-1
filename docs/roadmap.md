@@ -206,7 +206,8 @@ Bug hunts are periodic code-review tasks run by an executor agent (no UI needed)
       OIDC-логин через браузер (+ повторный запуск без логина — токен из keyring),
       выход, статус-бар Онлайн/Оффлайн (стоп backend → ⚠ Оффлайн), дашборд на
       dev-seed данных (карточки, гистограмма, mock-бейдж)
-- [ ] Screens: карьеры + участки (list/create)
+- [x] Screens: карьеры + участки (list/create, общий выбор карьера через AppState,
+      403 сервера показывается в форме) — 70 tests green
 - [ ] Screens: паспорта (list/detail/create, переходы статусов кнопками, взрыв);
       ролевой гейтинг кнопок по `/access` (`user<surveyor<blaster<admin`)
 - [ ] **UT-D2 — CRUD и workflow паспорта:** создать карьер → участок → паспорт →
