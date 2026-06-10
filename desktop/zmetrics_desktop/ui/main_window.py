@@ -125,6 +125,7 @@ class MainWindow(QMainWindow):
         if self._context is not None:
             self._build_auth_toolbar()
             self._build_sync_status()
+            self._load_access()
 
     def _build_screen(self, nav_label: str, title: str) -> QWidget:
         """Real screen when implemented (needs a context), placeholder otherwise."""
@@ -142,6 +143,10 @@ class MainWindow(QMainWindow):
             from zmetrics_desktop.ui.sections import SectionsScreen
 
             return SectionsScreen(self._context, self._state)
+        if nav_label == "Паспорта БВР":
+            from zmetrics_desktop.ui.passports import PassportsScreen
+
+            return PassportsScreen(self._context, self._state)
         return _placeholder(title)
 
     # --- Auth toolbar -----------------------------------------------------------
@@ -178,6 +183,19 @@ class MainWindow(QMainWindow):
     def _on_login_done(self) -> None:
         self._login_action.setEnabled(True)
         self._refresh_auth_ui()
+        self._load_access()
+
+    def _load_access(self) -> None:
+        """Fetch the caller's per-quarry roles for UI button gating (fail closed:
+        until this succeeds, write buttons stay hidden)."""
+        assert self._context is not None
+        if self._context.auth.access_token() is None:
+            return
+        from zmetrics_desktop.api.zmetrics import ZMetricsApi
+        from zmetrics_desktop.ui.workers import submit
+
+        api = ZMetricsApi(self._context.api)
+        submit(api.get_my_access, self._state.set_access, lambda _msg: None)
 
     def _on_login_failed(self, message: str) -> None:
         self._login_action.setEnabled(True)

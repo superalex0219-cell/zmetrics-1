@@ -64,8 +64,8 @@ keycloak_data/
 data/raw/
 data/interim/
 data/processed/
-models/
-artifacts/
+/models/
+/artifacts/
 *.pt
 *.pth
 *.onnx

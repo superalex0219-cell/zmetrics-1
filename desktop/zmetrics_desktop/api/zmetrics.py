@@ -24,6 +24,7 @@ from zmetrics_desktop.models import (
     CaptureSession,
     Device,
     Quarry,
+    QuarryAccessEntry,
     Recommendation,
     Report,
     SiteSection,
@@ -40,6 +41,14 @@ def _items(payload: dict, model: type[T]) -> list[T]:
 class ZMetricsApi:
     def __init__(self, client: ApiClient) -> None:
         self._client = client
+
+    # --- Access -----------------------------------------------------------------------
+
+    def get_my_access(self) -> list[QuarryAccessEntry]:
+        """Caller's role per quarry — UI gating only; the backend re-checks every call."""
+        return [
+            QuarryAccessEntry.model_validate(item) for item in self._client.get("/access")
+        ]
 
     # --- Quarries / sections ----------------------------------------------------------
 
