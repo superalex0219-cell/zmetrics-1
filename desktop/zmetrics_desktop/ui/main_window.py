@@ -178,6 +178,7 @@ class MainWindow(QMainWindow):
         worker = _LoginWorker(self._context)
         worker.signals.succeeded.connect(self._on_login_done)
         worker.signals.failed.connect(self._on_login_failed)
+        self._login_worker = worker  # keep alive until the queued signal is delivered
         QThreadPool.globalInstance().start(worker)
 
     def _on_login_done(self) -> None:
@@ -227,6 +228,7 @@ class MainWindow(QMainWindow):
         self._sync_running = True
         worker = _SyncWorker(self._context)
         worker.signals.finished.connect(self._on_sync_finished)
+        self._sync_worker = worker  # keep alive until the queued signal is delivered
         QThreadPool.globalInstance().start(worker)
 
     def _on_sync_finished(self, report: SyncReport) -> None:

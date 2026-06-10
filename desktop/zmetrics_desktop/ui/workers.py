@@ -2,6 +2,11 @@
 
 Every network call from a screen goes through ``submit`` — never block the Qt event
 loop. Error messages are emitted as strings (the screen decides how to surface them).
+
+The worker is kept in a module-level registry until its signal is delivered: QThreadPool
+auto-deletes the QRunnable right after ``run()``, and if Python then collects the
+``signals`` QObject before the main loop processes the queued emit, the callback is
+silently dropped (intermittent «data never arrives» bugs).
 """
 from __future__ import annotations
 
@@ -9,6 +14,9 @@ from collections.abc import Callable
 from typing import Any
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
+
+# Workers waiting for their queued signal to be processed by the UI thread.
+_active: set[FnWorker] = set()
 
 
 class FnWorker(QRunnable):
@@ -41,5 +49,9 @@ def submit(
         worker.signals.succeeded.connect(on_success)
     if on_error is not None:
         worker.signals.failed.connect(on_error)
+    # Release the keep-alive AFTER the user callback (slots run in connection order).
+    _active.add(worker)
+    worker.signals.succeeded.connect(lambda _result=None: _active.discard(worker))
+    worker.signals.failed.connect(lambda _message=None: _active.discard(worker))
     QThreadPool.globalInstance().start(worker)
     return worker

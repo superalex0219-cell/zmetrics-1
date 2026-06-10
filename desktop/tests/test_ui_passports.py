@@ -134,6 +134,40 @@ def test_admin_approves_submitted(qapp):
     assert not screen._transition_buttons["submit"].isVisibleTo(screen)
 
 
+def test_existing_blast_event_is_rendered(qapp):
+    """GET blast-event → 200: строка «Взрыв» заполняется, кнопка фиксации скрыта.
+
+    JSON повторяет реальный ответ FastAPI (UUID/datetime строками, лишние поля)."""
+    state = AppState()
+    state.set_quarry(_Q1)
+    state.set_access(_access(3))
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/blast-event"):
+            return httpx.Response(200, json={
+                "id": "5f0d8c7e-0000-0000-0000-000000000001",
+                "passport_id": "p1",
+                "executed_by_id": "5f0d8c7e-0000-0000-0000-000000000002",
+                "blast_datetime": "2026-06-10T03:45:00Z",
+                "actual_explosive_kg": 1250.0,
+                "weather_conditions": None,
+                "notes": None,
+                "created_at": "2026-06-10T03:45:10.123456Z",
+                "updated_at": "2026-06-10T03:45:10.123456Z",
+            })
+        return httpx.Response(200, json={"items": [], "total": 0, "page": 1, "page_size": 50})
+
+    context = SimpleNamespace(api=ApiClient(Settings(), transport=httpx.MockTransport(handler)))
+    screen = PassportsScreen(context, state)
+    screen._render_passports([_S1], [_passport("active")])
+    screen._table.selectRow(0)
+
+    assert "2026-06-10 03:45" in screen._detail_labels["blast_event"].text()
+    assert "1250" in screen._detail_labels["blast_event"].text()
+    assert not screen._blast_button.isVisibleTo(screen)
+    assert screen._error_label.text() == ""
+
+
 def test_blast_button_only_without_existing_event(qapp):
     state = AppState()
     state.set_quarry(_Q1)
