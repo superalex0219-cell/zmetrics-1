@@ -15,6 +15,8 @@ import time
 import uuid
 from typing import TYPE_CHECKING
 
+import numpy as np
+
 from PySide6.QtCore import QObject, QRunnable, Qt, QThreadPool, QTimer, Signal
 from PySide6.QtGui import QHideEvent, QImage, QPixmap, QShowEvent
 from PySide6.QtWidgets import (
@@ -336,11 +338,14 @@ class CaptureScreen(QWidget):
             f"стерео SBS, {frame.width}×{frame.height} на глаз" if frame.side_by_side
             else f"моно, {frame.width}×{frame.height} (только left_frame)"
         )
-        left = frame.left
+        # The left eye is a slice of the SBS frame (non-contiguous view) and
+        # QImage requires a C-contiguous buffer; this also serves as the copy
+        # (the ndarray buffer is reused by the next frame).
+        left = np.ascontiguousarray(frame.left)
         image = QImage(
             left.data, left.shape[1], left.shape[0], left.strides[0],
             QImage.Format.Format_BGR888,
-        ).copy()  # copy: the ndarray buffer is reused by the next frame
+        ).copy()
         self._preview_label.setPixmap(
             QPixmap.fromImage(image).scaled(
                 self._preview_label.size(),
