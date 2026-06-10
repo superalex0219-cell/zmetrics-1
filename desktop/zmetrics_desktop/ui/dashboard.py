@@ -156,6 +156,8 @@ class DashboardScreen(QWidget):
         body.setColumnStretch(1, 2)
         root.addLayout(body, stretch=1)
 
+        self._state.quarry_changed.connect(self._on_state_quarry_changed)
+
     # --- Loading ----------------------------------------------------------------------
 
     def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 — Qt naming
@@ -196,6 +198,20 @@ class DashboardScreen(QWidget):
             quarry = self._quarries[index]
             self._state.set_quarry(quarry)
             self._load_quarry_data(quarry)
+
+    def _on_state_quarry_changed(self, quarry: object) -> None:
+        """Another screen changed the selection — follow it without re-emitting."""
+        if quarry is None or not self._loaded_once:
+            return
+        for i in range(self._quarry_combo.count()):
+            if self._quarry_combo.itemData(i) == quarry.id:
+                if i != self._quarry_combo.currentIndex():
+                    self._quarry_combo.blockSignals(True)
+                    self._quarry_combo.setCurrentIndex(i)
+                    self._quarry_combo.blockSignals(False)
+                    self._load_quarry_data(quarry)  # type: ignore[arg-type]
+                return
+        self.refresh()  # quarry not in the combo yet (created elsewhere) — reload the list
 
     def _load_quarry_data(self, quarry: Quarry) -> None:
         def load() -> tuple[int, list[Report], AnalysisResult | None]:

@@ -134,6 +134,14 @@ class MainWindow(QMainWindow):
             from zmetrics_desktop.ui.dashboard import DashboardScreen
 
             return DashboardScreen(self._context, self._state)
+        if nav_label == "Карьеры":
+            from zmetrics_desktop.ui.quarries import QuarriesScreen
+
+            return QuarriesScreen(self._context, self._state)
+        if nav_label == "Участки":
+            from zmetrics_desktop.ui.sections import SectionsScreen
+
+            return SectionsScreen(self._context, self._state)
         return _placeholder(title)
 
     # --- Auth toolbar -----------------------------------------------------------
