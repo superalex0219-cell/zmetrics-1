@@ -1,26 +1,38 @@
 # ZMetrics - STATUS
 
-**Last updated:** 2026-06-10 (rev 10 — реальное железо: ZED 2 + RTX 5080, IGEV++ depth, E2E пройден)
-**Git HEAD:** `fa0f67d` (+ незакоммиченная IGEV/ZED-работа этой сессии, см. п.1)
+**Last updated:** 2026-06-10 (rev 11 — IGEV/ZED закоммичено; M3-PART: реальные particle_volumes + granulometry)
+**Git HEAD:** см. `git log` (rev 10 закоммичен тремя коммитами + M3-PART этой сессией)
 
 ---
 
 ## TL;DR для следующей сессии
 
-1. **E2E на реальном железе пройден** (2026-06-10 вечер): ZED 2 (SN 21907252, 2.2K SBS)
-   → заводская калибровка → rectification → **IGEV++ depth на RTX 5080 (CUDA)** →
-   2.74M валидных точек (100% покрытие), медианная глубина правдоподобна → SAM3 (0 камней
-   на тестовом кадре со столом — честно) → mock-грансостав. Прогон:
+1. **M3-PART сделан (эта сессия): последний mock-участок реального контура закрыт.**
+   `cv_particles.py` (`CVParticleVolumeStep`): SAM3-полигоны (координаты исходного
+   кадра) → ректифицированное пространство через `cv2.undistortPoints(R=R1, P=P1)`
+   (тот же `stereoRectify(alpha=0)`, что в rectification) → растеризация → медианная
+   глубина по маске → метрические размеры. Юнит-агностичность по глубине:
+   `unit_to_mm = baseline_mm / ‖T‖`. Размер = эквивалентный диаметр по площади
+   проекции; объём = эллипсоид по осям minAreaRect (a×b×b). Фильтры: <64 px,
+   depth coverage <0.3, вырожденные полигоны — всё в `n_skipped`.
+   `cv_granulometry.py` (`CVGranulometryStep`): **объёмно**-взвешенный кумулятив
+   (в моке был счётный), P10/P50/P80 интерполяцией по нему, RR-fit, честный
+   confidence = mean_seg_conf × mean_depth_coverage × min(1, n/30); notes несут
+   provenance (segmentation/depth backend/calibration_id). 0 камней → пустой
+   результат с NULL P-значениями, **отчёт/рекомендация НЕ создаются** (гард в
+   `_create_report_and_recommendation`); synthetic_fallback-маски → confidence ≤0.2
+   + «⚠». Wiring: реальные шаги при `ENABLE_REAL_STEREO && ENABLE_SAM3`.
+   Заголовок отчёта теперь честный: «real CV (SAM3 + stereo depth)» vs «⚠ Mock».
+   Тесты: `worker/tests/test_cv_granulometry.py` (7 шт.).
+   **Не проверено на железе** — нужен прогон `scripts/e2e_capture_smoke.py`
+   с пересборкой образа воркера (`docker compose build worker`).
+2. **E2E на реальном железе пройден (2026-06-10, до M3-PART):** ZED 2 (SN 21907252,
+   2.2K SBS) → заводская калибровка → rectification → IGEV++ depth на RTX 5080 →
+   2.74M точек → SAM3 (0 камней на столе — честно) → mock-грансостав. Прогон:
    `desktop\.venv\Scripts\python.exe scripts\e2e_capture_smoke.py --password changeme`.
-   Незакоммичено: `worker/app/pipeline/igev/` (vendored IGEV++, MIT), `cv_depth_igev.py`,
-   wiring (config/pipeline/Dockerfile/compose), `desktop/.../capture/zed_calibration.py`
-   + тесты, `scripts/register_zed_device.py`, `scripts/e2e_capture_smoke.py`,
-   `infra/zed_calibration_SN21907252.conf`.
-2. **Глубина теперь нейросетевая (DEPTH-2 закрыт досрочно):** `DEPTH_BACKEND=igev`
-   (+`ENABLE_REAL_STEREO=true`) включает IGEV++ вместо SGBM; тот же контракт артефактов
-   (`depth_map.npy`/`disparity.npy` + Q-матрица). Веса: `infra/models/igev/` (gdown,
-   в gitignore по `*.pth`); чекпойнт по умолчанию sceneflow.pth, есть middlebury/eth3d/kitti.
-   Инференс даунскейлится до `IGEV_MAX_INFERENCE_WIDTH=1536`, диспаритет рескейлится назад.
+   `DEPTH_BACKEND=igev` (+`ENABLE_REAL_STEREO=true`) включает IGEV++ вместо SGBM;
+   веса `infra/models/igev/` (gitignore по `*.pth`), дефолт sceneflow.pth;
+   инференс даунскейлится до `IGEV_MAX_INFERENCE_WIDTH=1536`.
 3. **Калибровка ZED:** заводской conf качается по серийнику (`calib.stereolabs.com/?SN=…`),
    конвертация в `CalibrationCreate` — `zmetrics_desktop/capture/zed_calibration.py`
    (Rodrigues([RX,CV,RZ]), **T=[−Baseline,TY,TZ] мм** — конвенция zed-opencv-native).
@@ -43,8 +55,8 @@
 | Suite | Result |
 |---|---|
 | backend (`backend/tests`) | 78 passed (не перегонялись в этой сессии) |
-| worker (`worker/tests`) | 32 passed |
-| desktop (`desktop/tests`) | 121 passed (113 + 8 новых zed_calibration; venv пересоздан — старый сломала переустановка Python) |
+| worker (`worker/tests`) | 39 passed (32 + 7 новых cv_particles/cv_granulometry; хостовый `worker\.venv` — досталлен sqlalchemy) |
+| desktop (`desktop/tests`) | 121 passed (113 + 8 новых zed_calibration) |
 
 ---
 
@@ -70,7 +82,7 @@
 | Layer | State |
 |---|---|
 | **backend** | M1 + SEC + ADMIN-USERS-1 (включён, проверен E2E) + bootstrap/capture фиксы |
-| **worker** | SAM3 (CUDA) + M2-STEREO + **IGEV++ depth (`DEPTH_BACKEND=igev`, проверен на RTX 5080)** + M5-a/M5-b; mock остались только particle_volumes/granulometry |
+| **worker** | SAM3 (CUDA) + M2-STEREO + IGEV++ depth + M5-a/M5-b + **M3-PART: реальные particle_volumes/granulometry (юнит-тесты ок, на железе не гонялись)**; mock-шагов в реальном контуре больше нет |
 | **desktop** | Все экраны DESKTOP-1 готовы; + `capture/zed_calibration.py` (заводская калибровка ZED); юзертесты UT-D1..D5 не пройдены; PyInstaller не делался |
 | **infra** | compose: IGEV env+volume; GPU-оверлей (SAM3+IGEV); `infra/models/igev/` веса; conf ZED SN21907252 в репо |
 
@@ -80,9 +92,8 @@
 
 | Pri | ID | Item | Notes |
 |---|---|---|---|
-| **P1** | — | Закоммитить IGEV/ZED-работу этой сессии | дерево грязное; diplom/ и vkr_chapter_3_4.md — личные файлы, НЕ коммитить |
-| **P1** | M3-PART | Реальные particle_volumes + granulometry из SAM3-масок × depth | последний mock-участок; глубина в мм |
-| **P1** | — | Съёмка реального развала ZED 2 + прогон IGEV+SAM3 | смоук на столе прошёл, нужны камни |
+| **P1** | — | E2E смоук M3-PART на железе | `docker compose build worker` + флаги + `scripts/e2e_capture_smoke.py`; на столе ждём «0 камней → нет отчёта» |
+| **P1** | — | Съёмка реального развала ZED 2 + прогон IGEV+SAM3+M3-PART | смоук на столе прошёл (до M3-PART), нужны камни |
 | **P2** | UT-D1 | Smoke десктопа: логин (OIDC/keyring), статус-бар, дашборд | чек-лист в roadmap (DESKTOP-1) |
 | **P2** | UT-D2 | CRUD + workflow паспорта + ролевой гейтинг | после UT-D1 |
 | **P2** | UT-D3 | Capture E2E через UI десктопа на ZED 2 | headless-вариант уже есть: `scripts/e2e_capture_smoke.py`; в UI кнопка «Подготовить тестовое устройство» создаёт заглушку — добавить путь «зарегистрировать ZED по серийнику» |
@@ -91,6 +102,7 @@
 | **P3** | — | SAM3-метаданные в панели завершённого job + smoke на `rock-sample.png` без камеры | картинка теперь в `desktop/zmetrics_desktop/assets/` |
 | **P3** | — | PyInstaller build + UT-D6 на чистой Windows | |
 | ~~done~~ | DEPTH-2 | ~~IGEV-Stereo вместо SGBM~~ | сделано 2026-06-10, IGEV++ за `DEPTH_BACKEND=igev` |
+| ~~done~~ | M3-PART | ~~Реальные particle_volumes + granulometry~~ | сделано 2026-06-11, требуется прогон на железе |
 
 ---
 

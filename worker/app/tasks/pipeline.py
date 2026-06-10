@@ -114,14 +114,26 @@ async def _run_pipeline_async(job_id: UUID) -> dict:
         else:
             segmentation_step = MockSegmentationStep()
 
+        # Real particle measurement needs both real depth and real masks;
+        # otherwise metric sizes would be derived from synthetic geometry.
+        use_real_granulometry = use_real_stereo and settings.enable_sam3
+        if use_real_granulometry:
+            from app.pipeline.cv_granulometry import CVGranulometryStep
+            from app.pipeline.cv_particles import CVParticleVolumeStep
+            particles_step = CVParticleVolumeStep()
+            granulometry_step = CVGranulometryStep()
+        else:
+            particles_step = MockParticleVolumeStep()
+            granulometry_step = MockGranulometryStep()
+
         pipeline = Pipeline([
             calibration_step,
             rectification_step,
             depth_step,
             pointcloud_step,
             segmentation_step,
-            MockParticleVolumeStep(),
-            MockGranulometryStep(),
+            particles_step,
+            granulometry_step,
         ])
 
         try:
@@ -144,7 +156,12 @@ async def _run_pipeline_async(job_id: UUID) -> dict:
             job.completed_at = datetime.now(tz=timezone.utc)
             job.pipeline_log = pipeline_log
 
-            await _create_report_and_recommendation(db, job_id, job.capture_session_id)
+            await _create_report_and_recommendation(
+                db,
+                job_id,
+                job.capture_session_id,
+                analysis_method="cv" if use_real_granulometry else "mock",
+            )
             await db.commit()
 
             logger.info("pipeline_completed", job_id=str(job_id), steps=len(step_results))
@@ -200,6 +217,7 @@ async def _create_report_and_recommendation(
     db,
     job_id: UUID,
     capture_session_id: UUID,
+    analysis_method: str = "mock",
 ) -> None:
     """
     Create Report + Recommendation after successful pipeline.
@@ -253,16 +271,28 @@ async def _create_report_and_recommendation(
         else None
     )
 
+    if ar.p80_mm is None:
+        # Nothing was measured (e.g. real CV detected zero particles) — a report
+        # or recommendation built on an empty distribution would be misleading.
+        logger.warning("pipeline_empty_result_no_report", job_id=str(job_id))
+        return
+
     p10: float | None = float(ar.p10_mm) if ar.p10_mm is not None else None
     p50: float | None = float(ar.p50_mm) if ar.p50_mm is not None else None
-    p80 = float(ar.p80_mm) if ar.p80_mm is not None else 0.0
+    p80 = float(ar.p80_mm)
     conf = float(ar.confidence_score) if ar.confidence_score is not None else 0.0
+
+    # SAFETY: the analysis method must be displayed prominently in the report.
+    if analysis_method == "cv":
+        title = f"Granulometric Analysis (P80={p80:.0f}mm) — real CV (SAM3 + stereo depth)"
+    else:
+        title = f"⚠ Mock pipeline — Granulometric Analysis (P80={p80:.0f}mm)"
 
     report = Report(
         analysis_result_id=ar.id,
         generated_by_id=session.captured_by_id,
         report_type="granulometric",
-        title=f"⚠ Mock pipeline — Granulometric Analysis (P80={p80:.0f}mm)",
+        title=title,
     )
     db.add(report)
     await db.flush()
