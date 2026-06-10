@@ -116,6 +116,21 @@ def test_create_user_shows_password_from_response(qapp):
     assert body == {"email": "ivan@example.com", "full_name": "Иван Петров"}
 
 
+def test_create_dialog_rejects_cyrillic_email(qapp):
+    from zmetrics_desktop.ui.admin import UserCreateDialog
+
+    dialog = UserCreateDialog()
+    dialog._full_name.setText("Иван Петров")
+    dialog._email.setText("иван@тест.рф")  # Keycloak такое отвергает — ловим до запроса
+    dialog._validate_and_accept()
+    assert dialog.email is None
+    assert "латиницей" in dialog._error.text()
+
+    dialog._email.setText("ivan@test.com")
+    dialog._validate_and_accept()
+    assert dialog.email == "ivan@test.com"
+
+
 def test_access_list_renders_roles(qapp):
     screen = _screen(_empty_handler)
     screen._render_accesses([_ACCESS])

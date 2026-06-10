@@ -8,6 +8,7 @@
 """
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Qt
@@ -101,8 +102,12 @@ class UserCreateDialog(QDialog):
     def _validate_and_accept(self) -> None:
         email = self._email.text().strip()
         full_name = self._full_name.text().strip()
-        if "@" not in email or not full_name:
-            self._error.setText("Укажите email и ФИО")
+        if not full_name:
+            self._error.setText("Укажите ФИО")
+            return
+        # Keycloak требует ASCII-email (кириллица в адресе даёт 400 на сервере).
+        if not re.fullmatch(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", email):
+            self._error.setText("Некорректный email — латиницей, формата user@domain.tld")
             return
         self.email, self.full_name = email, full_name
         self.accept()
