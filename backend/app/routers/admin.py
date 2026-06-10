@@ -303,6 +303,30 @@ async def grant_access(
     if role is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unknown role: {body.role_name}")
 
+    # Upsert: a user has at most one active role per quarry (uq_quarry_user_active).
+    # Granting over an existing role means "change the role", not a 500.
+    existing = (await db.execute(
+        select(QuarryUserAccess).where(
+            QuarryUserAccess.user_id == body.user_id,
+            QuarryUserAccess.quarry_id == quarry_id,
+            QuarryUserAccess.revoked_at.is_(None),
+        )
+    )).scalar_one_or_none()
+    if existing is not None:
+        if existing.role_id == role.id:
+            return existing  # идемпотентно: роль уже выдана
+        existing.revoked_at = datetime.now(tz=timezone.utc)
+        db.add(AuditLog(
+            actor_id=current_user.id,
+            entity_type="quarry_user_access",
+            entity_id=existing.id,
+            action="role_revoked",
+            old_value={"quarry_id": str(quarry_id), "reason": "role_changed"},
+        ))
+        # UPDATE must hit the DB before the INSERT below to satisfy the partial
+        # unique index within the same transaction.
+        await db.flush()
+
     access = QuarryUserAccess(
         user_id=body.user_id,
         quarry_id=quarry_id,

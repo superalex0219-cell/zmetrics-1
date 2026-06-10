@@ -109,6 +109,8 @@ class MainWindow(QMainWindow):
         from zmetrics_desktop.ui.state import AppState
 
         self._state = AppState()
+        self._access_retry_count = 0
+        self._state.access_refresh_requested.connect(self._load_access)
 
         self._stack = QStackedWidget()
         for nav_label, title in SCREENS:
@@ -204,15 +206,32 @@ class MainWindow(QMainWindow):
 
     def _load_access(self) -> None:
         """Fetch the caller's per-quarry roles for UI button gating (fail closed:
-        until this succeeds, write buttons stay hidden)."""
+        until this succeeds, write buttons stay hidden).
+
+        Раньше ошибка глоталась молча и карта оставалась пустой до перезапуска —
+        админ выглядел бесправным. Теперь ретраим с паузой, пока не получится.
+        """
         assert self._context is not None
         if self._context.auth.access_token() is None:
             return
+        from PySide6.QtCore import QTimer
+
         from zmetrics_desktop.api.zmetrics import ZMetricsApi
         from zmetrics_desktop.ui.workers import submit
 
         api = ZMetricsApi(self._context.api)
-        submit(api.get_my_access, self._state.set_access, lambda _msg: None)
+
+        def loaded(entries: object) -> None:
+            self._access_retry_count = 0
+            self._state.set_access(entries)  # type: ignore[arg-type]
+
+        def failed(_message: str) -> None:
+            if self._access_retry_count >= 5:
+                return  # дальше — по явному действию (логин/обновление экрана)
+            self._access_retry_count += 1
+            QTimer.singleShot(5_000, self._load_access)
+
+        submit(api.get_my_access, loaded, failed)
 
     def _on_login_failed(self, message: str) -> None:
         self._login_action.setEnabled(True)

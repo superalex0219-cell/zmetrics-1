@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.roles import RoleLevel
 from app.db.models.audit import AuditLog
 from app.db.models.quarry import Quarry
-from app.db.models.user import UserProfile
+from app.db.models.user import QuarryUserAccess, Role, UserProfile
 from app.services.keycloak_admin import KeycloakAdminError, get_keycloak_admin_client
 from tests.factories import client_for, grant_access, jwt, make_user
 
@@ -375,7 +375,9 @@ async def test_update_user_full_name(db_session: AsyncSession):
     admin = await _admin_user(db_session)
     target = await make_user(db_session, full_name="Old Name")
 
-    async with client_for(db_session, jwt(admin.keycloak_sub)) as ac:
+    # mgmt_enabled=False: hermetic — the real env may have the KC sync flag on,
+    # and these subs do not exist in a real Keycloak.
+    async with _admin_kc(db_session, admin.keycloak_sub, _fake_kc(), mgmt_enabled=False) as ac:
         resp = await ac.patch(
             f"/api/v1/admin/users/{target.id}",
             json={"full_name": "New Name"},
@@ -391,7 +393,7 @@ async def test_deactivate_user_sets_inactive(db_session: AsyncSession):
     admin = await _admin_user(db_session)
     target = await make_user(db_session)
 
-    async with client_for(db_session, jwt(admin.keycloak_sub)) as ac:
+    async with _admin_kc(db_session, admin.keycloak_sub, _fake_kc(), mgmt_enabled=False) as ac:
         resp = await ac.delete(
             f"/api/v1/admin/users/{target.id}",
             headers={"Authorization": "Bearer fake"},
@@ -423,7 +425,7 @@ async def test_user_response_excludes_keycloak_sub(db_session: AsyncSession):
     admin = await _admin_user(db_session)
     target = await make_user(db_session, full_name="Old Name")
 
-    async with client_for(db_session, jwt(admin.keycloak_sub)) as ac:
+    async with _admin_kc(db_session, admin.keycloak_sub, _fake_kc(), mgmt_enabled=False) as ac:
         list_resp = await ac.get(
             "/api/v1/admin/users", headers={"Authorization": "Bearer fake"}
         )
@@ -439,3 +441,64 @@ async def test_user_response_excludes_keycloak_sub(db_session: AsyncSession):
     assert all("keycloak_sub" not in item for item in items)
     assert patch_resp.status_code == 200
     assert "keycloak_sub" not in patch_resp.json()
+
+
+# ── POST /admin/quarries/{id}/access: upsert semantics ───────────────────────
+@pytest.mark.asyncio
+async def test_grant_access_over_existing_changes_role(db_session: AsyncSession):
+    """Granting a role to a user who already has one on the quarry must change
+    the role (revoke old + create new), not 500 on uq_quarry_user_active."""
+    admin = await _admin_user(db_session)
+    target = await make_user(db_session)
+    quarry = Quarry(name=f"Quarry {uuid.uuid4()}")
+    db_session.add(quarry)
+    surveyor = Role(name=f"surveyor-{uuid.uuid4()}", level=int(RoleLevel.SURVEYOR))
+    blaster = Role(name=f"blaster-{uuid.uuid4()}", level=int(RoleLevel.BLASTER))
+    db_session.add_all([surveyor, blaster])
+    await db_session.flush()
+
+    async with client_for(db_session, jwt(admin.keycloak_sub)) as ac:
+        headers = {"Authorization": "Bearer fake"}
+        first = await ac.post(
+            f"/api/v1/admin/quarries/{quarry.id}/access",
+            json={"user_id": str(target.id), "quarry_id": str(quarry.id),
+                  "role_name": surveyor.name},
+            headers=headers,
+        )
+        # Идемпотентный повтор той же роли
+        repeat = await ac.post(
+            f"/api/v1/admin/quarries/{quarry.id}/access",
+            json={"user_id": str(target.id), "quarry_id": str(quarry.id),
+                  "role_name": surveyor.name},
+            headers=headers,
+        )
+        # Смена роли поверх существующей
+        change = await ac.post(
+            f"/api/v1/admin/quarries/{quarry.id}/access",
+            json={"user_id": str(target.id), "quarry_id": str(quarry.id),
+                  "role_name": blaster.name},
+            headers=headers,
+        )
+
+    assert first.status_code == 201
+    assert repeat.status_code == 201
+    assert repeat.json()["id"] == first.json()["id"]  # та же активная запись
+    assert change.status_code == 201
+    assert change.json()["id"] != first.json()["id"]
+
+    rows = (await db_session.execute(
+        select(QuarryUserAccess).where(
+            QuarryUserAccess.user_id == target.id,
+            QuarryUserAccess.quarry_id == quarry.id,
+        )
+    )).scalars().all()
+    active = [r for r in rows if r.revoked_at is None]
+    assert len(rows) == 2
+    assert len(active) == 1
+    assert active[0].role_id == blaster.id
+
+    audit_actions = (await db_session.execute(
+        select(AuditLog.action).where(AuditLog.entity_type == "quarry_user_access")
+    )).scalars().all()
+    assert "role_revoked" in audit_actions
+    assert audit_actions.count("role_assigned") >= 2

@@ -22,6 +22,9 @@ ROLE_ADMIN = 4
 class AppState(QObject):
     quarry_changed = Signal(object)  # Quarry | None
     access_changed = Signal()
+    # Экраны просят перезагрузить карту доступов (например, после создания карьера —
+    # бэкенд выдал создателю admin, но /me/access грузился ещё при логине).
+    access_refresh_requested = Signal()
 
     def __init__(self) -> None:
         super().__init__()
@@ -34,6 +37,9 @@ class AppState(QObject):
             return
         self.quarry = quarry
         self.quarry_changed.emit(quarry)
+
+    def request_access_refresh(self) -> None:
+        self.access_refresh_requested.emit()
 
     def set_access(self, entries: list[QuarryAccessEntry]) -> None:
         self._access = {entry.quarry_id: entry.role_level for entry in entries}

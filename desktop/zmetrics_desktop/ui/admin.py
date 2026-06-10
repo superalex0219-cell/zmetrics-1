@@ -419,13 +419,19 @@ class AdminScreen(QWidget):
         if user is None or not quarry_id:
             return
         self._error_label.clear()
-        submit(
-            lambda: self._api.admin_grant_access(quarry_id, user.id, role_name),
-            lambda _result, user_id=user.id: submit(
+
+        def granted(_result: object, user_id: str = user.id) -> None:
+            # Роль могла быть выдана самому себе — освежаем карту доступов UI
+            self._state.request_access_refresh()
+            submit(
                 lambda: self._api.admin_user_access(user_id),
                 self._render_accesses,
                 self._on_error,
-            ),
+            )
+
+        submit(
+            lambda: self._api.admin_grant_access(quarry_id, user.id, role_name),
+            granted,
             self._on_error,
         )
 
@@ -447,12 +453,17 @@ class AdminScreen(QWidget):
         if answer != QMessageBox.StandardButton.Yes:
             return
         self._error_label.clear()
-        submit(
-            lambda: self._api.admin_revoke_access(access.quarry_id, access.access_id),
-            lambda _result, user_id=user.id: submit(
+
+        def revoked(_result: object, user_id: str = user.id) -> None:
+            self._state.request_access_refresh()
+            submit(
                 lambda: self._api.admin_user_access(user_id),
                 self._render_accesses,
                 self._on_error,
-            ),
+            )
+
+        submit(
+            lambda: self._api.admin_revoke_access(access.quarry_id, access.access_id),
+            revoked,
             self._on_error,
         )

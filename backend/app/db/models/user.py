@@ -60,11 +60,13 @@ class QuarryUserAccess(Base, TimestampMixin):
     __table_args__ = (
         # Partial index: only one active (non-revoked) role per user per quarry.
         # Full UniqueConstraint would block re-granting after revocation.
+        # sqlite_where keeps the test database (aiosqlite) semantics identical.
         Index(
             "uq_quarry_user_active",
             "user_id", "quarry_id",
             unique=True,
             postgresql_where=text("revoked_at IS NULL"),
+            sqlite_where=text("revoked_at IS NULL"),
         ),
     )
 

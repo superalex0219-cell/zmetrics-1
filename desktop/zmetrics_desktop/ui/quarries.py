@@ -171,6 +171,9 @@ class QuarriesScreen(QWidget):
         for edit in (self._name_edit, self._location_edit, self._lat_edit, self._lon_edit):
             edit.clear()
         self._state.set_quarry(quarry)
+        # Бэкенд выдал создателю admin на новый карьер — обновляем карту доступов,
+        # иначе кнопки на новом карьере останутся выключенными до перезапуска.
+        self._state.request_access_refresh()
         self.refresh()
 
     def _on_create_error(self, message: str) -> None:
