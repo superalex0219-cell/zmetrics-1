@@ -147,6 +147,10 @@ class MainWindow(QMainWindow):
             from zmetrics_desktop.ui.passports import PassportsScreen
 
             return PassportsScreen(self._context, self._state)
+        if nav_label == "Съёмка":
+            from zmetrics_desktop.ui.capture import CaptureScreen
+
+            return CaptureScreen(self._context, self._state)
         return _placeholder(title)
 
     # --- Auth toolbar -----------------------------------------------------------

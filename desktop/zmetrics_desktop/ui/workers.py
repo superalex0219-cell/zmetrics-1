@@ -33,9 +33,16 @@ class FnWorker(QRunnable):
         try:
             result = self._fn()
         except Exception as exc:  # ApiError, httpx errors, validation errors
-            self.signals.failed.emit(str(exc))
+            self._emit_safely(self.signals.failed, str(exc))
         else:
-            self.signals.succeeded.emit(result)
+            self._emit_safely(self.signals.succeeded, result)
+
+    @staticmethod
+    def _emit_safely(signal: Any, value: Any) -> None:
+        try:
+            signal.emit(value)
+        except RuntimeError:
+            pass  # приложение завершилось, сигнал уже удалён — результат больше не нужен
 
 
 def submit(

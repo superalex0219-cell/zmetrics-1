@@ -20,7 +20,7 @@ from dataclasses import dataclass
 
 import httpx
 
-from zmetrics_desktop.api.client import ApiClient, ApiError
+from zmetrics_desktop.api.client import ApiClient
 from zmetrics_desktop.offline.sync_manager import PendingUpload, SyncManager
 
 # Sends one queued operation; raises ApiError / httpx errors on failure.
@@ -44,7 +44,15 @@ def _post_json(api: ApiClient, item: PendingUpload) -> None:
 
 def default_handlers() -> dict[str, Handler]:
     """Built-in operation kinds. Screens extend this as they are ported."""
-    return {"post_json": _post_json}
+    from zmetrics_desktop.offline.capture_upload import (
+        KIND_CAPTURE_UPLOAD,
+        handle_capture_upload,
+    )
+
+    return {
+        "post_json": _post_json,
+        KIND_CAPTURE_UPLOAD: handle_capture_upload,
+    }
 
 
 class SyncProcessor:
@@ -74,13 +82,15 @@ class SyncProcessor:
                 continue
             try:
                 handler(self._api, item)
-            except ApiError as exc:
-                self._queue.mark_failure(item.idempotency_key, str(exc))
-                failed += 1
             except httpx.HTTPError as exc:
                 # Connectivity dropped mid-drain: keep the item as-is, stop this pass.
                 _ = exc
                 break
+            except Exception as exc:
+                # ApiError or a handler bug (e.g. missing frame file): count an attempt —
+                # the item retires to failed() instead of wedging the queue forever.
+                self._queue.mark_failure(item.idempotency_key, str(exc))
+                failed += 1
             else:
                 self._queue.remove(item.idempotency_key)
                 sent += 1
