@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, EmailStr
 
 
 class UserProfileRead(BaseModel):
@@ -16,9 +16,33 @@ class UserProfileRead(BaseModel):
     created_at: datetime
 
 
+class UserProfileCreate(BaseModel):
+    email: EmailStr
+    full_name: str
+    # No password field — a temporary one is generated server-side and returned once.
+
+
 class UserProfileUpdate(BaseModel):
     full_name: str | None = None
-    is_active: bool | None = None
+    email: EmailStr | None = None  # NEW — synced to Keycloak identity
+    is_active: bool | None = None  # synced to Keycloak `enabled`
+
+
+class UserCreateResult(BaseModel):
+    user: UserProfileRead
+    temporary_password: str  # shown ONCE; never stored, never logged
+
+
+class PasswordResetResult(BaseModel):
+    temporary_password: str  # shown ONCE; never stored, never logged
+
+
+class UserQuarryAccessRead(BaseModel):
+    access_id: UUID
+    quarry_id: UUID
+    quarry_name: str
+    role_name: str
+    role_level: int
 
 
 class QuarryAccessCreate(BaseModel):

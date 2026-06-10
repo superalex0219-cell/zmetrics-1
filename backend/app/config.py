@@ -33,6 +33,16 @@ class Settings(BaseSettings):
     kc_realm: str = "zmetrics"
     kc_client_id: str = "zmetrics-backend"
 
+    # Service-account credentials for the Keycloak Admin REST API (user management).
+    # The existing `zmetrics-backend` client has serviceAccountsEnabled=true; this is
+    # its client secret. Read from env only (KC_CLIENT_SECRET) — never hardcode/log it.
+    kc_client_secret: str = "changeme-replace-in-production"
+
+    # Gates admin user-management against Keycloak (create / reset-password /
+    # email+enabled sync). Ships dark: turn on only where the service account is
+    # wired up. Local edits of full_name/is_active stay available without it.
+    enable_admin_user_management: bool = False
+
     # CORS
     backend_cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173"]
 
@@ -50,6 +60,18 @@ class Settings(BaseSettings):
     @property
     def token_issuer(self) -> str:
         return f"{self.kc_public_url}/realms/{self.kc_realm}"
+
+    @computed_field
+    @property
+    def kc_token_url(self) -> str:
+        """Backchannel token endpoint for the service-account client_credentials grant."""
+        return f"{self.kc_internal_url}/realms/{self.kc_realm}/protocol/openid-connect/token"
+
+    @computed_field
+    @property
+    def kc_admin_users_url(self) -> str:
+        """Keycloak Admin REST base for user resources."""
+        return f"{self.kc_internal_url}/admin/realms/{self.kc_realm}/users"
 
 
 @lru_cache

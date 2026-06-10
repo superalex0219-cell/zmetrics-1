@@ -4,16 +4,68 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.roles import require_any_admin
 from app.config import get_settings
 from app.db.models.audit import AuditLog
+from app.db.models.quarry import Quarry
 from app.db.models.user import QuarryUserAccess, Role, UserProfile
 from app.db.session import get_db
 from app.dependencies import get_current_user
 from app.schemas.common import PaginatedResponse
-from app.schemas.user import QuarryAccessCreate, QuarryAccessRead, UserProfileRead, UserProfileUpdate
+from app.schemas.user import (
+    PasswordResetResult,
+    QuarryAccessCreate,
+    QuarryAccessRead,
+    UserCreateResult,
+    UserProfileCreate,
+    UserProfileRead,
+    UserProfileUpdate,
+    UserQuarryAccessRead,
+)
+from app.services.keycloak_admin import (
+    KeycloakAdminClient,
+    KeycloakAdminError,
+    generate_temp_password,
+    get_keycloak_admin_client,
+)
+
+
+def _require_user_mgmt() -> None:
+    """503 when admin user-management against Keycloak is not enabled.
+
+    Ships the create / reset-password / identity-sync paths dark so they only
+    run where the service account is configured.
+    """
+    if not get_settings().enable_admin_user_management:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="User management is not enabled",
+        )
+
+
+def _map_kc_error(exc: KeycloakAdminError) -> HTTPException:
+    """Map a Keycloak admin failure to a client response without leaking internals."""
+    if exc.status_code == 409:
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User already exists")
+    if exc.status_code == 400:
+        # Keycloak rejected the data (e.g. non-ASCII or malformed email/username).
+        return HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Identity provider rejected the data: email/username must be a valid "
+                   "ASCII e-mail address",
+        )
+    if exc.status_code in (502, 503):
+        return HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Identity provider unavailable",
+        )
+    return HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail="Identity provider error",
+    )
 
 
 class DevSeedResult(BaseModel):
@@ -43,27 +95,168 @@ async def list_users(
     return PaginatedResponse(items=items, total=total, page=page, page_size=page_size)
 
 
+@router.post("/users", response_model=UserCreateResult, status_code=status.HTTP_201_CREATED)
+async def create_user(
+    body: UserProfileCreate,
+    current_user: UserProfile = Depends(require_any_admin),
+    db: AsyncSession = Depends(get_db),
+    kc: KeycloakAdminClient = Depends(get_keycloak_admin_client),
+) -> UserCreateResult:
+    """Create a Keycloak account, then mirror it as a local UserProfile.
+
+    The temporary password is generated server-side and returned ONCE — it is
+    never persisted, logged, or written to the audit trail.
+    """
+    _require_user_mgmt()
+
+    temp_password = generate_temp_password()
+    try:
+        sub = await kc.create_user(
+            email=body.email, full_name=body.full_name, temp_password=temp_password
+        )
+    except KeycloakAdminError as exc:
+        raise _map_kc_error(exc)
+
+    new = UserProfile(
+        keycloak_sub=sub,
+        email=body.email,
+        full_name=body.full_name,
+        is_active=True,
+    )
+    db.add(new)
+    try:
+        # Savepoint so a local uniqueness failure doesn't poison the surrounding
+        # transaction (and doesn't roll back unrelated work in tests).
+        async with db.begin_nested():
+            await db.flush()
+    except IntegrityError:
+        # Local mirror failed after Keycloak created the account → neutralize the
+        # orphan so a disabled account can't linger. Best-effort; never fatal.
+        try:
+            await kc.update_user(sub=sub, enabled=False)
+        except KeycloakAdminError:
+            pass
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Email already registered"
+        )
+
+    db.add(AuditLog(
+        actor_id=current_user.id,
+        entity_type="user_profile",
+        entity_id=new.id,
+        action="user_created",
+        new_value={"email": body.email},  # NEVER include the temporary password
+    ))
+    return UserCreateResult(
+        user=UserProfileRead.model_validate(new),
+        temporary_password=temp_password,
+    )
+
+
 @router.patch("/users/{user_id}", response_model=UserProfileRead)
 async def update_user(
     user_id: UUID,
     body: UserProfileUpdate,
     current_user: UserProfile = Depends(require_any_admin),
     db: AsyncSession = Depends(get_db),
+    kc: KeycloakAdminClient = Depends(get_keycloak_admin_client),
 ) -> UserProfile:
     result = await db.execute(select(UserProfile).where(UserProfile.id == user_id))
     user = result.scalar_one_or_none()
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    for field, value in body.model_dump(exclude_unset=True).items():
+
+    mgmt_enabled = get_settings().enable_admin_user_management
+    # Email is an identity field — refuse to edit it locally when we can't sync
+    # it to Keycloak, or the app DB and the IdP would diverge.
+    if body.email is not None and not mgmt_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="User management is not enabled",
+        )
+
+    changes = body.model_dump(exclude_unset=True)
+    for field, value in changes.items():
         setattr(user, field, value)
     db.add(AuditLog(
         actor_id=current_user.id,
         entity_type="user_profile",
         entity_id=user_id,
         action="user_updated",
-        new_value=body.model_dump(exclude_unset=True),
+        new_value=changes,
     ))
+
+    if mgmt_enabled and changes:
+        try:
+            await kc.update_user(
+                sub=user.keycloak_sub,
+                email=body.email,
+                full_name=body.full_name,
+                enabled=body.is_active,
+            )
+        except KeycloakAdminError as exc:
+            raise _map_kc_error(exc)
     return user
+
+
+@router.post("/users/{user_id}/reset-password", response_model=PasswordResetResult)
+async def reset_user_password(
+    user_id: UUID,
+    current_user: UserProfile = Depends(require_any_admin),
+    db: AsyncSession = Depends(get_db),
+    kc: KeycloakAdminClient = Depends(get_keycloak_admin_client),
+) -> PasswordResetResult:
+    """Set a one-time temporary password in Keycloak; return it ONCE."""
+    _require_user_mgmt()
+
+    result = await db.execute(select(UserProfile).where(UserProfile.id == user_id))
+    user = result.scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    temp_password = generate_temp_password()
+    try:
+        await kc.reset_password(sub=user.keycloak_sub, temp_password=temp_password)
+    except KeycloakAdminError as exc:
+        raise _map_kc_error(exc)
+
+    db.add(AuditLog(
+        actor_id=current_user.id,
+        entity_type="user_profile",
+        entity_id=user.id,
+        action="user_password_reset",  # NEVER include the password in old/new_value
+    ))
+    return PasswordResetResult(temporary_password=temp_password)
+
+
+@router.get("/users/{user_id}/access", response_model=list[UserQuarryAccessRead])
+async def get_user_access(
+    user_id: UUID,
+    current_user: UserProfile = Depends(require_any_admin),
+    db: AsyncSession = Depends(get_db),
+) -> list[UserQuarryAccessRead]:
+    """List a user's active per-quarry roles (excludes revoked + soft-deleted quarries)."""
+    rows = (await db.execute(
+        select(QuarryUserAccess.id, Quarry.id, Quarry.name, Role.name, Role.level)
+        .join(Quarry, Quarry.id == QuarryUserAccess.quarry_id)
+        .join(Role, Role.id == QuarryUserAccess.role_id)
+        .where(
+            QuarryUserAccess.user_id == user_id,
+            QuarryUserAccess.revoked_at.is_(None),
+            Quarry.deleted_at.is_(None),
+        )
+        .order_by(Quarry.name)
+    )).all()
+    return [
+        UserQuarryAccessRead(
+            access_id=access_id,
+            quarry_id=quarry_id,
+            quarry_name=quarry_name,
+            role_name=role_name,
+            role_level=role_level,
+        )
+        for access_id, quarry_id, quarry_name, role_name, role_level in rows
+    ]
 
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -71,6 +264,7 @@ async def deactivate_user(
     user_id: UUID,
     current_user: UserProfile = Depends(require_any_admin),
     db: AsyncSession = Depends(get_db),
+    kc: KeycloakAdminClient = Depends(get_keycloak_admin_client),
 ) -> None:
     result = await db.execute(select(UserProfile).where(UserProfile.id == user_id))
     user = result.scalar_one_or_none()
@@ -88,6 +282,13 @@ async def deactivate_user(
         entity_id=user_id,
         action="user_deactivated",
     ))
+
+    # Disable the Keycloak account too, so a deactivated user cannot log in.
+    if get_settings().enable_admin_user_management:
+        try:
+            await kc.update_user(sub=user.keycloak_sub, enabled=False)
+        except KeycloakAdminError as exc:
+            raise _map_kc_error(exc)
 
 
 @router.post("/quarries/{quarry_id}/access", response_model=QuarryAccessRead, status_code=status.HTTP_201_CREATED)
