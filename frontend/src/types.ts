@@ -137,3 +137,66 @@ export interface AuditLogEntry {
   old_value: Record<string, unknown> | null;
   new_value: Record<string, unknown> | null;
 }
+
+export interface Device {
+  id: string;
+  serial_number: string;
+  model: string;
+  firmware_version: string | null;
+  notes: string | null;
+}
+
+export interface Calibration {
+  id: string;
+  device_id: string;
+  baseline_mm: number;
+  image_width_px: number;
+  image_height_px: number;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface CaptureSession {
+  id: string;
+  blast_event_id: string;
+  device_id: string;
+  calibration_id: string;
+  captured_by_id: string;
+  capture_datetime: string;
+  frame_count: number;
+  notes: string | null;
+}
+
+export interface AnalysisJob {
+  id: string;
+  capture_session_id: string;
+  model_version_id: string | null;
+  status: string; // queued | running | completed | failed
+  queued_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  error_message: string | null;
+  pipeline_log: Record<string, unknown> | null;
+}
+
+export interface Artifact {
+  id: string;
+  capture_session_id: string;
+  artifact_type: string;
+  storage_bucket: string;
+  storage_key: string;
+  file_size_bytes: number | null;
+  content_type: string | null;
+  frame_index: number | null;
+}
+
+export interface CapturedFrame {
+  id: string;
+  blob: Blob;
+  dataUrl: string;
+  width: number;
+  height: number;
+  artifactType: 'left_frame' | 'right_frame';
+  frameIndex: number;
+  capturedAt: number;
+}

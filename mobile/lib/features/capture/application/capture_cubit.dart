@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/network/api_exception.dart';
@@ -134,6 +136,59 @@ class CaptureCubit extends Cubit<DataState<CaptureView>> {
     ));
     await load();
     return session;
+  }
+
+  Future<AnalysisJob> uploadStereoFramesAndTrigger({
+    required Uint8List leftJpeg,
+    Uint8List? rightJpeg,
+  }) async {
+    final cur = state;
+    if (cur is! DataLoaded<CaptureView>) throw StateError('Not loaded');
+    final view = cur.value;
+    if (!view.canCreateSession) {
+      throw StateError('Device and calibration required');
+    }
+
+    final session = await _captureRepo.createCaptureSessionOnline(
+      NewCaptureSession(
+        blastEventId: '',
+        quarryId: quarryId,
+        passportId: passportId,
+        deviceId: view.selectedDeviceId!,
+        calibrationId: view.selectedCalibrationId!,
+        captureDateTime: DateTime.now().toUtc().toIso8601String(),
+        frameCount: rightJpeg == null ? 1 : 2,
+      ),
+    );
+
+    await _captureRepo.uploadFrameArtifact(
+      session.id,
+      leftJpeg,
+      artifactType: 'left_frame',
+      frameIndex: 0,
+    );
+    if (rightJpeg != null) {
+      await _captureRepo.uploadFrameArtifact(
+        session.id,
+        rightJpeg,
+        artifactType: 'right_frame',
+        frameIndex: 0,
+      );
+    }
+
+    final job = await _captureRepo.triggerAnalysis(session.id);
+    final latest = state;
+    if (latest is DataLoaded<CaptureView>) {
+      emit(DataLoaded(latest.value.copyWith(
+        sessions: [
+          session.copyWith(frameCount: rightJpeg == null ? 1 : 2, synced: true),
+          ...latest.value.sessions.where((s) => s.id != session.id),
+        ],
+        jobs: [...latest.value.jobs, job],
+        pollingJob: job,
+      )));
+    }
+    return job;
   }
 
   Future<AnalysisJob> triggerAnalysis(String captureSessionId) async {

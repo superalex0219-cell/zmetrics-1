@@ -1,30 +1,49 @@
-import { type CSSProperties, useEffect, useMemo, useState } from "react";
+import {
+  type CSSProperties,
+  type FormEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Activity,
+  AlertCircle,
   BarChart3,
+  CheckCircle2,
+  ChevronRight,
   ClipboardList,
   Download,
   FileText,
   Hammer,
   ImageUp,
   LayoutDashboard,
+  Loader2,
   LockKeyhole,
   Map,
   MapPinned,
+  Menu,
+  RefreshCcw,
+  Search,
   Settings,
   ShieldCheck,
   Sparkles,
   UserRound,
   Users,
+  X,
 } from "lucide-react";
 
 import { api, checkBackend, downloadWithAuth, kc } from "./api";
 import type {
+  AnalysisJob,
   AnalysisResult,
   AuditLogEntry,
   AuthUser,
   BlastEvent,
   BlastPassport,
+  CapturedFrame,
   Fraction,
   NavItem,
   NavKey,
@@ -46,9 +65,18 @@ const navItems: NavItem[] = [
   { key: "admin", label: "Администрирование", icon: ShieldCheck },
 ];
 
+type ToastState = {
+  type: "success" | "error" | "info";
+  message: string;
+} | null;
+
 export default function App() {
   const [active, setActive] = useState<NavKey>("dashboard");
   const [backendOnline, setBackendOnline] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [quarriesLoading, setQuarriesLoading] = useState(false);
+  const [contentLoading, setContentLoading] = useState(false);
+  const [toast, setToast] = useState<ToastState>(null);
 
   const [quarries, setQuarries] = useState<Quarry[]>([]);
   const [selectedQuarryId, setSelectedQuarryId] = useState<string | null>(null);
@@ -58,6 +86,40 @@ export default function App() {
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [latestAnalysisResult, setLatestAnalysisResult] = useState<AnalysisResult | null>(null);
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+
+  const activeNavItem = navItems.find((item) => item.key === active) ?? navItems[0];
+  const selectedQuarry = quarries.find((item) => item.id === selectedQuarryId) ?? null;
+
+  const notify = useCallback((type: NonNullable<ToastState>["type"], message: string) => {
+    setToast({ type, message });
+  }, []);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(null), 4200);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
+  const refreshQuarries = useCallback(async (preferredQuarryId?: string) => {
+    if (!kc.authenticated) return;
+
+    setQuarriesLoading(true);
+    try {
+      const qs = await api.quarries.list();
+      setQuarries(qs);
+      setSelectedQuarryId((current) => {
+        if (preferredQuarryId && qs.some((q) => q.id === preferredQuarryId)) {
+          return preferredQuarryId;
+        }
+        if (current && qs.some((q) => q.id === current)) {
+          return current;
+        }
+        return qs[0]?.id ?? null;
+      });
+    } finally {
+      setQuarriesLoading(false);
+    }
+  }, []);
 
   // On mount: check backend, sync auth state, load quarries if authenticated
   useEffect(() => {
@@ -72,55 +134,105 @@ export default function App() {
         email: tp?.["email"] as string | undefined,
       });
 
-      api.quarries
-        .list()
-        .then((qs) => {
-          setQuarries(qs);
-          if (qs.length > 0) {
-            setSelectedQuarryId(qs[0].id);
-          }
-        })
-        .catch(console.error);
+      void refreshQuarries().catch(console.error);
     }
-  }, []);
+  }, [refreshQuarries]);
 
   // When quarry selection changes, reload sections, passports, reports
   useEffect(() => {
-    if (!selectedQuarryId) return;
+    if (!selectedQuarryId) {
+      setSections([]);
+      setPassports([]);
+      setReports([]);
+      setLatestAnalysisResult(null);
+      setContentLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setContentLoading(true);
 
     void Promise.allSettled([
       api.sections.list(selectedQuarryId),
       api.passports.list(selectedQuarryId),
       api.reports.list(selectedQuarryId),
     ]).then(([sectsResult, passpsResult, repsResult]) => {
+      if (cancelled) return;
+
       if (sectsResult.status === "fulfilled") setSections(sectsResult.value);
-      else console.error(sectsResult.reason);
+      else {
+        console.error(sectsResult.reason);
+        notify("error", "Не удалось загрузить участки");
+      }
 
       if (passpsResult.status === "fulfilled") setPassports(passpsResult.value);
-      else console.error(passpsResult.reason);
+      else {
+        console.error(passpsResult.reason);
+        notify("error", "Не удалось загрузить паспорта");
+      }
 
       const reps = repsResult.status === "fulfilled" ? repsResult.value : [];
-      if (repsResult.status === "rejected") console.error(repsResult.reason);
+      if (repsResult.status === "rejected") {
+        console.error(repsResult.reason);
+        notify("error", "Не удалось загрузить отчеты");
+      }
       setReports(reps);
 
       if (reps.length > 0) {
         api.analysisResults
           .get(reps[0].analysis_result_id)
-          .then(setLatestAnalysisResult)
-          .catch(console.error);
+          .then((result) => {
+            if (!cancelled) setLatestAnalysisResult(result);
+          })
+          .catch((err) => {
+            console.error(err);
+            if (!cancelled) notify("error", "Не удалось загрузить последний анализ");
+          })
+          .finally(() => {
+            if (!cancelled) setContentLoading(false);
+          });
       } else {
         setLatestAnalysisResult(null);
+        setContentLoading(false);
       }
     });
-  }, [selectedQuarryId]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [notify, selectedQuarryId]);
+
+  const navigateTo = (key: NavKey) => {
+    setActive(key);
+    setMobileNavOpen(false);
+  };
+
+  const handleQuarryCreated = async (quarry: Quarry) => {
+    try {
+      await refreshQuarries(quarry.id);
+      notify("success", `Карьер «${quarry.name}» создан`);
+    } catch (err) {
+      console.error(err);
+      setQuarries((prev) => [quarry, ...prev.filter((item) => item.id !== quarry.id)]);
+      setSelectedQuarryId(quarry.id);
+      notify("info", "Карьер создан, список будет синхронизирован при следующем обновлении");
+    }
+    navigateTo("sites");
+  };
+
+  const handleSectionCreated = (section: SiteSection) => {
+    setSections((prev) => [section, ...prev.filter((item) => item.id !== section.id)]);
+    notify("success", `Участок «${section.name}» создан`);
+  };
 
   const handleLoadRecommendations = async (reportId: string) => {
     try {
       const recs = await api.recommendations.list(reportId);
       setRecommendations(recs);
-      setActive("recommendations");
+      navigateTo("recommendations");
     } catch (err) {
       console.error(err);
+      notify("error", "Не удалось загрузить рекомендации");
     }
   };
 
@@ -128,20 +240,36 @@ export default function App() {
     try {
       const updated = await api.recommendations.review(rec.report_id, rec.id, status);
       setRecommendations((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+      notify("success", "Статус рекомендации обновлен");
     } catch (err) {
       console.error(err);
+      notify("error", "Не удалось обновить рекомендацию");
     }
   };
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
+    <div className={mobileNavOpen ? "app-shell nav-open" : "app-shell"}>
+      <div
+        className="nav-backdrop"
+        aria-hidden="true"
+        onClick={() => setMobileNavOpen(false)}
+      />
+      <aside className="sidebar" aria-label="Основная навигация">
         <div className="brand">
           <Hammer aria-hidden="true" />
           <div>
             <strong>ZMetrics</strong>
             <span>БВР контроль</span>
           </div>
+          <button
+            className="icon-button sidebar-close"
+            type="button"
+            title="Закрыть меню"
+            aria-label="Закрыть меню"
+            onClick={() => setMobileNavOpen(false)}
+          >
+            <X aria-hidden="true" />
+          </button>
         </div>
         <nav className="nav-list" aria-label="Основные разделы">
           {navItems.map((item) => (
@@ -150,81 +278,138 @@ export default function App() {
               className={active === item.key ? "nav-item active" : "nav-item"}
               type="button"
               title={item.label}
-              onClick={() => setActive(item.key)}
+              aria-current={active === item.key ? "page" : undefined}
+              onClick={() => navigateTo(item.key)}
             >
               <item.icon aria-hidden="true" />
               <span>{item.label}</span>
             </button>
           ))}
         </nav>
+        <div className="sidebar-card">
+          <span>Выбранный карьер</span>
+          <strong>{selectedQuarry?.name ?? "Не выбран"}</strong>
+        </div>
       </aside>
 
       <main className="workspace">
         <header className="topbar">
-          <div>
-            <span className="eyebrow">Смена {new Date().toLocaleDateString("ru-RU")}</span>
-            <h1>{navItems.find((item) => item.key === active)?.label}</h1>
+          <div className="topbar-title">
+            <button
+              className="icon-button mobile-menu-button"
+              type="button"
+              title="Открыть меню"
+              aria-label="Открыть меню"
+              onClick={() => setMobileNavOpen(true)}
+            >
+              <Menu aria-hidden="true" />
+            </button>
+            <div>
+              <Breadcrumbs activeItem={activeNavItem} selectedQuarry={selectedQuarry} />
+              <h1>{activeNavItem.label}</h1>
+            </div>
           </div>
-          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          <div className="topbar-actions">
             {authUser && (
-              <span className="eyebrow">
+              <span className="user-chip">
+                <UserRound aria-hidden="true" />
                 {authUser.preferred_username ?? authUser.email ?? ""}
               </span>
             )}
+            <button
+              className="icon-button"
+              type="button"
+              title="Обновить список карьеров"
+              aria-label="Обновить список карьеров"
+              disabled={quarriesLoading}
+              onClick={() =>
+                void refreshQuarries(selectedQuarryId ?? undefined).catch((err) => {
+                  console.error(err);
+                  notify("error", "Не удалось обновить карьеры");
+                })
+              }
+            >
+              {quarriesLoading ? <Loader2 aria-hidden="true" /> : <RefreshCcw aria-hidden="true" />}
+            </button>
             <div className={backendOnline ? "connection online" : "connection"}>
               <span />
-              API {backendOnline ? "онлайн" : "демо"}
+              API {backendOnline ? "онлайн" : "недоступен"}
             </div>
           </div>
         </header>
 
-        {active === "auth" && <AuthPage authUser={authUser} />}
-        {active === "dashboard" && (
+        {contentLoading && active !== "auth" && <LoadingBanner label="Обновляем данные" />}
+
+        <section className="page-content" aria-busy={contentLoading}>
+          {active === "auth" && <AuthPage authUser={authUser} />}
+          {active === "dashboard" && (
           <Dashboard
             quarries={quarries}
+            selectedQuarry={selectedQuarry}
             sections={sections}
+            passports={passports}
             reports={reports}
             latestResult={latestAnalysisResult}
+            onNavigate={navigateTo}
           />
-        )}
-        {active === "quarries" && <QuarriesPage quarries={quarries} />}
-        {active === "sites" && (
-          <SitesPage
-            quarries={quarries}
-            selectedQuarryId={selectedQuarryId}
-            onSelectQuarry={setSelectedQuarryId}
-            sections={sections}
-          />
-        )}
-        {active === "passports" && (
-          <PassportsPage
-            quarries={quarries}
-            sections={sections}
-            selectedQuarryId={selectedQuarryId}
-            onSelectQuarry={setSelectedQuarryId}
-            passports={passports}
-            onCreated={(p) => setPassports((prev) => [p, ...prev])}
-            onUpdated={(p) => setPassports((prev) => prev.map((x) => (x.id === p.id ? p : x)))}
-          />
-        )}
-        {active === "analyses" && <AnalysesPage />}
-        {active === "reports" && (
-          <ReportsPage
-            quarries={quarries}
-            selectedQuarryId={selectedQuarryId}
-            onSelectQuarry={setSelectedQuarryId}
-            reports={reports}
-            onLoadRecommendations={handleLoadRecommendations}
-          />
-        )}
-        {active === "recommendations" && (
-          <RecommendationsPage
-            recommendations={recommendations}
-            onReview={handleReviewRecommendation}
-          />
-        )}
-        {active === "admin" && <AdminPage />}
+          )}
+          {active === "quarries" && (
+            <QuarriesPage quarries={quarries} onCreated={handleQuarryCreated} />
+          )}
+          {active === "sites" && (
+            <SitesPage
+              quarries={quarries}
+              selectedQuarryId={selectedQuarryId}
+              onSelectQuarry={setSelectedQuarryId}
+              sections={sections}
+              onCreated={handleSectionCreated}
+            />
+          )}
+          {active === "passports" && (
+            <PassportsPage
+              quarries={quarries}
+              sections={sections}
+              selectedQuarryId={selectedQuarryId}
+              onSelectQuarry={setSelectedQuarryId}
+              passports={passports}
+              onCreated={(p) => {
+                setPassports((prev) => [p, ...prev]);
+                notify("success", "Паспорт БВР создан");
+              }}
+              onUpdated={(p) => {
+                setPassports((prev) => prev.map((x) => (x.id === p.id ? p : x)));
+                notify("success", "Паспорт БВР обновлен");
+              }}
+            />
+          )}
+          {active === "analyses" && (
+            <AnalysesPage
+              quarries={quarries}
+              selectedQuarryId={selectedQuarryId}
+              onSelectQuarry={setSelectedQuarryId}
+              onNavigate={navigateTo}
+            />
+          )}
+          {active === "reports" && (
+            <ReportsPage
+              quarries={quarries}
+              selectedQuarryId={selectedQuarryId}
+              onSelectQuarry={setSelectedQuarryId}
+              reports={reports}
+              onLoadRecommendations={handleLoadRecommendations}
+              onError={(message) => notify("error", message)}
+            />
+          )}
+          {active === "recommendations" && (
+            <RecommendationsPage
+              recommendations={recommendations}
+              onReview={handleReviewRecommendation}
+            />
+          )}
+          {active === "admin" && <AdminPage />}
+        </section>
       </main>
+      <Toast toast={toast} onClose={() => setToast(null)} />
     </div>
   );
 }
@@ -232,6 +417,72 @@ export default function App() {
 // ---------------------------------------------------------------------------
 // Auth
 // ---------------------------------------------------------------------------
+
+function Breadcrumbs({
+  activeItem,
+  selectedQuarry,
+}: {
+  activeItem: NavItem;
+  selectedQuarry: Quarry | null;
+}) {
+  return (
+    <nav className="breadcrumbs" aria-label="Хлебные крошки">
+      <span>ZMetrics</span>
+      <ChevronRight aria-hidden="true" />
+      {selectedQuarry && (
+        <>
+          <span>{selectedQuarry.name}</span>
+          <ChevronRight aria-hidden="true" />
+        </>
+      )}
+      <strong>{activeItem.label}</strong>
+    </nav>
+  );
+}
+
+function LoadingBanner({ label }: { label: string }) {
+  return (
+    <div className="loading-banner" role="status" aria-live="polite">
+      <Loader2 aria-hidden="true" />
+      <span>{label}</span>
+    </div>
+  );
+}
+
+function Toast({ toast, onClose }: { toast: ToastState; onClose: () => void }) {
+  if (!toast) return null;
+  const Icon = toast.type === "success" ? CheckCircle2 : toast.type === "error" ? AlertCircle : Sparkles;
+  return (
+    <div className={`toast ${toast.type}`} role="status" aria-live="polite">
+      <Icon aria-hidden="true" />
+      <span>{toast.message}</span>
+      <button className="icon-button" type="button" aria-label="Закрыть уведомление" onClick={onClose}>
+        <X aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
+
+function EmptyState({
+  icon: Icon,
+  title,
+  description,
+  action,
+}: {
+  icon: NavItem["icon"];
+  title: string;
+  description: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="empty-state">
+      <Icon aria-hidden="true" />
+      <strong>{title}</strong>
+      <p>{description}</p>
+      {action}
+    </div>
+  );
+}
 
 function AuthPage({ authUser }: { authUser: AuthUser | null }) {
   return (
@@ -284,14 +535,20 @@ function AuthPage({ authUser }: { authUser: AuthUser | null }) {
 
 function Dashboard({
   quarries,
+  selectedQuarry,
   sections,
+  passports,
   reports,
   latestResult,
+  onNavigate,
 }: {
   quarries: Quarry[];
+  selectedQuarry: Quarry | null;
   sections: SiteSection[];
+  passports: BlastPassport[];
   reports: Report[];
   latestResult: AnalysisResult | null;
+  onNavigate: (key: NavKey) => void;
 }) {
   const fractions: Fraction[] = useMemo(() => {
     if (!latestResult?.size_distribution) return [];
@@ -301,8 +558,53 @@ function Dashboard({
     }));
   }, [latestResult]);
 
+  const workflow = [
+    { label: "Карьер", done: quarries.length > 0, count: quarries.length, icon: Map },
+    { label: "Участок", done: sections.length > 0, count: sections.length, icon: MapPinned },
+    { label: "Паспорт", done: passports.length > 0, count: passports.length, icon: ClipboardList },
+    { label: "Анализ", done: latestResult !== null, count: latestResult ? 1 : 0, icon: BarChart3 },
+    { label: "Отчет", done: reports.length > 0, count: reports.length, icon: FileText },
+  ];
+
   return (
-    <div className="stack">
+    <div className="dashboard-screen">
+      <section className="dashboard-command">
+        <div className="command-copy">
+          <span className="section-kicker">Оперативный контур</span>
+          <h2>{selectedQuarry ? selectedQuarry.name : "Подготовьте первый карьер"}</h2>
+          <p>
+            Рабочий экран для цепочки БВР: структура карьера, паспорта, анализ фрагментации,
+            отчеты и рекомендации в одном месте.
+          </p>
+          <div className="command-actions">
+            <button className="primary" type="button" onClick={() => onNavigate("quarries")}>
+              <Map aria-hidden="true" />
+              Карьеры
+            </button>
+            <button type="button" onClick={() => onNavigate("passports")}>
+              <ClipboardList aria-hidden="true" />
+              Паспорт БВР
+            </button>
+            <button type="button" onClick={() => onNavigate("reports")}>
+              <FileText aria-hidden="true" />
+              Отчеты
+            </button>
+          </div>
+        </div>
+        <div className="command-visual">
+          <img
+            src="/assets/rock-sample.png"
+            alt="Фрагменты горной массы"
+            loading="lazy"
+            decoding="async"
+          />
+          <div className="command-badge">
+            <span>P80</span>
+            <strong>{latestResult?.p80_mm != null ? `${latestResult.p80_mm} мм` : "нет данных"}</strong>
+          </div>
+        </div>
+      </section>
+
       <section className="metrics-grid">
         <MetricCard icon={Map} label="Карьеры" value={String(quarries.length)} tone="teal" />
         <MetricCard
@@ -320,39 +622,148 @@ function Dashboard({
         />
       </section>
 
-      <section className="content-grid two">
-        <div className="image-panel">
-          <img src="/assets/rock-sample.png" alt="Фрагменты горной массы" />
-          {latestResult && (
-            <div className="image-stats">
-              <span>
-                {latestResult.oversize_percent != null
-                  ? `Негабарит: ${latestResult.oversize_percent.toFixed(1)}%`
-                  : "Последний анализ"}
-              </span>
-              <strong>
-                {latestResult.confidence_score != null
-                  ? `Достоверность: ${Math.round(latestResult.confidence_score * 100)}%`
-                  : "Нет оценки"}
-              </strong>
-            </div>
-          )}
+      <section className="workflow-panel">
+        <div className="section-heading">
+          <div>
+            <span className="section-kicker">Workflow</span>
+            <h2>Готовность данных</h2>
+          </div>
+          <span className="status-pill">{workflow.filter((step) => step.done).length}/5 этапов</span>
         </div>
+        <div className="workflow-grid">
+          {workflow.map((step) => (
+            <WorkflowStep key={step.label} {...step} />
+          ))}
+        </div>
+      </section>
+
+      <section className="dashboard-grid">
         <div className="data-panel">
           <PanelTitle icon={BarChart3} title="Распределение фракций" />
           {fractions.length > 0 ? (
             <Histogram fractions={fractions} />
           ) : (
-            <p style={{ color: "var(--muted)", margin: 0 }}>Нет данных об анализе</p>
+            <EmptyState
+              icon={BarChart3}
+              title="Нет данных анализа"
+              description="После обработки capture session здесь появится распределение фракций."
+            />
           )}
         </div>
+
+        <RecentReports reports={reports.slice(0, 4)} onOpenReports={() => onNavigate("reports")} />
       </section>
 
-      <section className="data-panel">
-        <PanelTitle icon={ClipboardList} title="Последние участки" />
-        <SectionTable rows={sections.slice(0, 8)} />
+      <section className="dashboard-grid">
+        <section className="data-panel">
+          <PanelTitle icon={ClipboardList} title="Последние участки" />
+          <SectionTable rows={sections.slice(0, 8)} />
+        </section>
+        <section className="quick-panel">
+          <DashboardQuickAction
+            icon={MapPinned}
+            title="Создать участок"
+            description="Добавьте рабочую зону для нового паспорта БВР."
+            onClick={() => onNavigate("sites")}
+          />
+          <DashboardQuickAction
+            icon={Sparkles}
+            title="Проверить рекомендации"
+            description="Откройте последние предложения после отчета."
+            onClick={() => onNavigate("recommendations")}
+          />
+        </section>
       </section>
     </div>
+  );
+}
+
+function WorkflowStep({
+  label,
+  done,
+  count,
+  icon: Icon,
+}: {
+  label: string;
+  done: boolean;
+  count: number;
+  icon: NavItem["icon"];
+}) {
+  return (
+    <article className={done ? "workflow-step done" : "workflow-step"}>
+      <Icon aria-hidden="true" />
+      <div>
+        <strong>{label}</strong>
+        <span>{done ? `${count} в системе` : "ожидает данных"}</span>
+      </div>
+    </article>
+  );
+}
+
+function RecentReports({
+  reports,
+  onOpenReports,
+}: {
+  reports: Report[];
+  onOpenReports: () => void;
+}) {
+  return (
+    <section className="data-panel recent-panel">
+      <div className="section-heading">
+        <div>
+          <span className="section-kicker">Последние</span>
+          <h2>Отчеты</h2>
+        </div>
+        <button type="button" onClick={onOpenReports}>
+          <FileText aria-hidden="true" />
+          Все
+        </button>
+      </div>
+      {reports.length > 0 ? (
+        <div className="recent-list">
+          {reports.map((report) => (
+            <article key={report.id} className="recent-item">
+              <div>
+                <strong>{report.title}</strong>
+                <span>{new Date(report.created_at).toLocaleDateString("ru-RU")}</span>
+              </div>
+              <span className={report.analysis_method === "mock" ? "warning-badge" : "status-pill"}>
+                {report.analysis_method === "mock" ? "mock" : "real"}
+              </span>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <EmptyState
+          icon={FileText}
+          title="Отчетов пока нет"
+          description="Они появятся после завершения анализа capture session."
+        />
+      )}
+    </section>
+  );
+}
+
+function DashboardQuickAction({
+  icon: Icon,
+  title,
+  description,
+  onClick,
+}: {
+  icon: NavItem["icon"];
+  title: string;
+  description: string;
+  onClick: () => void;
+}) {
+  return (
+    <button className="quick-action" type="button" onClick={onClick}>
+      <Icon aria-hidden="true" />
+      <span>
+        <strong>{title}</strong>
+        <small>{description}</small>
+      </span>
+      <ChevronRight aria-hidden="true" />
+    </button>
   );
 }
 
@@ -360,46 +771,159 @@ function Dashboard({
 // Quarries
 // ---------------------------------------------------------------------------
 
-function QuarriesPage({ quarries }: { quarries: Quarry[] }) {
-  if (quarries.length === 0) {
-    return (
-      <div className="data-panel" style={{ padding: 24 }}>
-        <p style={{ color: "var(--muted)", margin: 0 }}>
-          Карьеры не найдены. Войдите в систему для загрузки данных.
-        </p>
-      </div>
-    );
+function parseOptionalNumber(value: string, label: string): number | null {
+  const normalized = value.trim().replace(",", ".");
+  if (!normalized) return null;
+
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`${label}: введите число`);
   }
+  return parsed;
+}
+
+function QuarriesPage({
+  quarries,
+  onCreated,
+}: {
+  quarries: Quarry[];
+  onCreated: (quarry: Quarry) => void | Promise<void>;
+}) {
+  const [form, setForm] = useState({
+    name: "",
+    location_description: "",
+    latitude: "",
+    longitude: "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSaveError(null);
+
+    if (!form.name.trim()) {
+      setSaveError("Укажите название карьера");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const created = await api.quarries.create({
+        name: form.name.trim(),
+        location_description: form.location_description.trim() || null,
+        latitude: parseOptionalNumber(form.latitude, "Широта"),
+        longitude: parseOptionalNumber(form.longitude, "Долгота"),
+      });
+      setForm({ name: "", location_description: "", latitude: "", longitude: "" });
+      await onCreated(created);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Не удалось создать карьер");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
-    <section className="list-grid">
-      {quarries.map((quarry) => (
-        <article className="entity-card" key={quarry.id}>
-          <div className="entity-head">
+    <section className="management-layout">
+      <aside className="management-aside">
+        <div className="management-copy">
+          <span className="section-kicker">Справочник</span>
+          <h2>Карьеры</h2>
+          <p>Создавайте площадки и сразу переходите к участкам, паспортам БВР и отчетам.</p>
+        </div>
+        <form className="form-panel compact" onSubmit={handleSubmit}>
+          <PanelTitle icon={Map} title="Новый карьер" />
+          <label>
+            Название
+            <input
+              value={form.name}
+              onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+              placeholder="Например, Demo Quarry"
+            />
+          </label>
+          <label>
+            Локация
+            <input
+              value={form.location_description}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, location_description: e.target.value }))
+              }
+              placeholder="Описание местоположения"
+            />
+          </label>
+          <label>
+            Широта
+            <input
+              value={form.latitude}
+              onChange={(e) => setForm((prev) => ({ ...prev, latitude: e.target.value }))}
+              placeholder="55.7512"
+              inputMode="decimal"
+            />
+          </label>
+          <label>
+            Долгота
+            <input
+              value={form.longitude}
+              onChange={(e) => setForm((prev) => ({ ...prev, longitude: e.target.value }))}
+              placeholder="37.6184"
+              inputMode="decimal"
+            />
+          </label>
+          {saveError && <p className="form-error">{saveError}</p>}
+          <button className="primary" type="submit" disabled={saving}>
             <Map aria-hidden="true" />
-            <strong>{quarry.name}</strong>
+            {saving ? "Создаем..." : "Создать карьер"}
+          </button>
+        </form>
+      </aside>
+
+      <div className="management-main">
+        <div className="section-heading">
+          <div>
+            <span className="section-kicker">Всего: {quarries.length}</span>
+            <h2>Список карьеров</h2>
           </div>
-          <dl>
-            <div>
-              <dt>Локация</dt>
-              <dd>{quarry.location_description ?? "—"}</dd>
-            </div>
-            {quarry.latitude != null && quarry.longitude != null && (
-              <div>
-                <dt>Координаты</dt>
-                <dd>
-                  {quarry.latitude.toFixed(4)}, {quarry.longitude.toFixed(4)}
-                </dd>
-              </div>
-            )}
-            <div>
-              <dt>ID</dt>
-              <dd style={{ fontFamily: "monospace", fontSize: "0.85em" }}>
-                {quarry.id.slice(-8)}
-              </dd>
-            </div>
-          </dl>
-        </article>
-      ))}
+        </div>
+        {quarries.length === 0 ? (
+          <EmptyState
+            icon={Map}
+            title="Карьеров пока нет"
+            description="Создайте первый карьер, чтобы открыть участки, паспорта БВР и последующие отчеты."
+          />
+        ) : (
+          <section className="list-grid quarry-grid">
+            {quarries.map((quarry) => (
+              <article className="entity-card quarry-card" key={quarry.id}>
+                <div className="entity-head">
+                  <Map aria-hidden="true" />
+                  <strong>{quarry.name}</strong>
+                </div>
+                <dl>
+                  <div>
+                    <dt>Локация</dt>
+                    <dd>{quarry.location_description ?? "—"}</dd>
+                  </div>
+                  {quarry.latitude != null && quarry.longitude != null && (
+                    <div>
+                      <dt>Координаты</dt>
+                      <dd>
+                        {quarry.latitude.toFixed(4)}, {quarry.longitude.toFixed(4)}
+                      </dd>
+                    </div>
+                  )}
+                  <div>
+                    <dt>ID</dt>
+                    <dd style={{ fontFamily: "monospace", fontSize: "0.85em" }}>
+                      {quarry.id.slice(-8)}
+                    </dd>
+                  </div>
+                </dl>
+              </article>
+            ))}
+          </section>
+        )}
+      </div>
     </section>
   );
 }
@@ -413,13 +937,18 @@ function SitesPage({
   selectedQuarryId,
   onSelectQuarry,
   sections,
+  onCreated,
 }: {
   quarries: Quarry[];
   selectedQuarryId: string | null;
   onSelectQuarry: (id: string) => void;
   sections: SiteSection[];
+  onCreated: (section: SiteSection) => void;
 }) {
   const [query, setQuery] = useState("");
+  const [form, setForm] = useState({ name: "", block_number: "", description: "" });
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const filteredSections = useMemo(() => {
     const s = query.trim().toLowerCase();
@@ -429,35 +958,104 @@ function SitesPage({
     );
   }, [sections, query]);
 
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSaveError(null);
+
+    if (!selectedQuarryId) {
+      setSaveError("Сначала создайте или выберите карьер");
+      return;
+    }
+    if (!form.name.trim()) {
+      setSaveError("Укажите название участка");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const created = await api.sections.create(selectedQuarryId, {
+        name: form.name.trim(),
+        block_number: form.block_number.trim() || null,
+        description: form.description.trim() || null,
+      });
+      setForm({ name: "", block_number: "", description: "" });
+      onCreated(created);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Не удалось создать участок");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
-    <section className="stack">
-      <div className="toolbar">
-        <label className="search-box">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <circle cx="11" cy="11" r="8" />
-            <path d="m21 21-4.3-4.3" />
-          </svg>
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Поиск участков"
-          />
-        </label>
-        <QuarrySelect quarries={quarries} value={selectedQuarryId} onChange={onSelectQuarry} />
-      </div>
-      <div className="data-panel">
-        <SectionTable rows={filteredSections} />
+    <section className="management-layout">
+      <aside className="management-aside">
+        <div className="management-copy">
+          <span className="section-kicker">Структура</span>
+          <h2>Участки</h2>
+          <p>Разбейте карьер на рабочие зоны, чтобы паспорта БВР были привязаны к месту работ.</p>
+        </div>
+        <form className="form-panel compact" onSubmit={handleSubmit}>
+          <PanelTitle icon={MapPinned} title="Новый участок" />
+          <label>
+            Название
+            <input
+              value={form.name}
+              onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+              placeholder="Например, Block A"
+              disabled={!selectedQuarryId}
+            />
+          </label>
+          <label>
+            Номер блока
+            <input
+              value={form.block_number}
+              onChange={(e) => setForm((prev) => ({ ...prev, block_number: e.target.value }))}
+              placeholder="A-001"
+              disabled={!selectedQuarryId}
+            />
+          </label>
+          <label>
+            Описание
+            <input
+              value={form.description}
+              onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
+              placeholder="Рабочая зона, уступ, примечание"
+              disabled={!selectedQuarryId}
+            />
+          </label>
+          {saveError && <p className="form-error">{saveError}</p>}
+          <button className="primary" type="submit" disabled={!selectedQuarryId || saving}>
+            <MapPinned aria-hidden="true" />
+            {saving ? "Создаем..." : "Создать участок"}
+          </button>
+        </form>
+      </aside>
+
+      <div className="management-main">
+        <div className="toolbar section-toolbar">
+          <label className="search-box">
+            <Search aria-hidden="true" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Поиск участков"
+              aria-label="Поиск участков"
+            />
+          </label>
+          <QuarrySelect quarries={quarries} value={selectedQuarryId} onChange={onSelectQuarry} />
+        </div>
+        <div className="data-panel">
+          {selectedQuarryId ? (
+            <SectionTable rows={filteredSections} />
+          ) : (
+            <EmptyState
+              icon={MapPinned}
+              title="Карьер не выбран"
+              description="Создайте или выберите карьер, чтобы добавить первый участок."
+            />
+          )}
+        </div>
       </div>
     </section>
   );
@@ -626,12 +1224,12 @@ function PassportsPage({
     <section className="content-grid two">
       <div className="data-panel">
         <PanelTitle icon={ClipboardList} title="Паспорта БВР" />
-        <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
+        <div className="toolbar compact-toolbar">
           <QuarrySelect
             quarries={quarries}
             value={selectedQuarryId}
             onChange={onSelectQuarry}
-            style={{ flex: 1 }}
+            className="grow"
           />
           <button type="button" onClick={openCreate} title="Создать паспорт">
             <ClipboardList aria-hidden="true" />
@@ -668,7 +1266,11 @@ function PassportsPage({
             </article>
           ))}
           {passports.length === 0 && (
-            <p style={{ color: "var(--muted)", margin: 0 }}>Нет паспортов для выбранного карьера</p>
+            <EmptyState
+              icon={ClipboardList}
+              title="Паспорта не найдены"
+              description="Создайте паспорт БВР для выбранного участка, чтобы продолжить рабочий сценарий."
+            />
           )}
         </div>
       </div>
@@ -676,7 +1278,7 @@ function PassportsPage({
       {detailId !== null ? (
         detailLoading && !detail ? (
           <div className="data-panel">
-            <p style={{ color: "var(--muted)", margin: 0 }}>Загрузка…</p>
+            <LoadingBanner label="Загружаем паспорт" />
           </div>
         ) : detail ? (
           <PassportDetail
@@ -710,15 +1312,16 @@ function PassportsPage({
           onCreated={onCreated}
         />
       ) : (
-        <div className="data-panel" style={{ display: "grid", gap: 14, alignContent: "start" }}>
-          <p style={{ color: "var(--muted)", margin: 0 }}>
-            Выберите паспорт из списка или создайте новый.
-          </p>
+        <div className="data-panel panel-stack">
+          <EmptyState
+            icon={ClipboardList}
+            title="Паспорт не выбран"
+            description="Выберите паспорт из списка или создайте новый для текущего карьера."
+          />
           <button
             className="primary"
             type="button"
             onClick={openCreate}
-            style={{ justifySelf: "start" }}
           >
             <ClipboardList aria-hidden="true" />
             Создать паспорт
@@ -954,16 +1557,16 @@ function PassportDetail({
                   <th>Стало</th>
                 </tr>
               </thead>
-              <tbody>
-                {auditLog.map((entry) => (
-                  <tr key={entry.id}>
-                    <td>{new Date(entry.occurred_at).toLocaleString("ru-RU")}</td>
-                    <td>{entry.action}</td>
-                    <td>{entry.old_value ? JSON.stringify(entry.old_value) : "—"}</td>
-                    <td>{entry.new_value ? JSON.stringify(entry.new_value) : "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
+                <tbody>
+                  {auditLog.map((entry) => (
+                    <tr key={entry.id}>
+                      <td data-label="Дата">{new Date(entry.occurred_at).toLocaleString("ru-RU")}</td>
+                      <td data-label="Действие">{entry.action}</td>
+                      <td data-label="Было">{entry.old_value ? JSON.stringify(entry.old_value) : "—"}</td>
+                      <td data-label="Стало">{entry.new_value ? JSON.stringify(entry.new_value) : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
             </table>
           </div>
         </div>
@@ -1252,30 +1855,503 @@ function PassportCreateForm({
 }
 
 // ---------------------------------------------------------------------------
-// Analyses — mobile-only placeholder
+// Analyses — camera capture panel
 // ---------------------------------------------------------------------------
 
-function AnalysesPage() {
+function captureFrameFromVideo(
+  video: HTMLVideoElement,
+): { left: { blob: Blob; dataUrl: string }; right: { blob: Blob; dataUrl: string } | null } {
+  const w = video.videoWidth;
+  const h = video.videoHeight;
+  const isSbs = w / h > 1.8;
+
+  const canvas = document.createElement('canvas');
+  const ctx2d = canvas.getContext('2d')!;
+
+  if (isSbs) {
+    const halfW = Math.floor(w / 2);
+
+    canvas.width = halfW;
+    canvas.height = h;
+    ctx2d.drawImage(video, 0, 0, halfW, h, 0, 0, halfW, h);
+    const leftDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+    const leftBlob = dataUrlToBlob(leftDataUrl);
+
+    ctx2d.clearRect(0, 0, halfW, h);
+    ctx2d.drawImage(video, halfW, 0, halfW, h, 0, 0, halfW, h);
+    const rightDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+    const rightBlob = dataUrlToBlob(rightDataUrl);
+
+    return {
+      left: { blob: leftBlob, dataUrl: leftDataUrl },
+      right: { blob: rightBlob, dataUrl: rightDataUrl },
+    };
+  } else {
+    canvas.width = w;
+    canvas.height = h;
+    ctx2d.drawImage(video, 0, 0);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+    return { left: { blob: dataUrlToBlob(dataUrl), dataUrl }, right: null };
+  }
+}
+
+function dataUrlToBlob(dataUrl: string): Blob {
+  const [header, b64] = dataUrl.split(',');
+  const mime = header.match(/:(.*?);/)?.[1] ?? 'image/jpeg';
+  const bytes = atob(b64 ?? '');
+  const arr = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+
+function AnalysesPage({
+  quarries,
+  selectedQuarryId,
+  onSelectQuarry,
+  onNavigate,
+}: {
+  quarries: Quarry[];
+  selectedQuarryId: string | null;
+  onSelectQuarry: (id: string | null) => void;
+  onNavigate: (key: NavKey) => void;
+}) {
+  // Passport selection
+  const [analysisPassportId, setAnalysisPassportId] = useState<string | null>(null);
+  const [analysisPassports, setAnalysisPassports] = useState<BlastPassport[]>([]);
+
+  // Browser camera
+  const [browserCameras, setBrowserCameras] = useState<MediaDeviceInfo[]>([]);
+  const [selectedCamId, setSelectedCamId] = useState<string | null>(null);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [isSbs, setIsSbs] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Captured frames gallery
+  const [frames, setFrames] = useState<CapturedFrame[]>([]);
+  const [nextFrameIndex, setNextFrameIndex] = useState(0);
+
+  // Launch state machine
+  type LaunchState = 'idle' | 'uploading' | 'enqueued' | 'polling' | 'completed' | 'failed';
+  const [launchState, setLaunchState] = useState<LaunchState>('idle');
+  const [launchStep, setLaunchStep] = useState('');
+  const [currentJob, setCurrentJob] = useState<AnalysisJob | null>(null);
+  const [jobResult, setJobResult] = useState<AnalysisResult | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [launchError, setLaunchError] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Stop stream and polling on unmount or screen change
+  useEffect(() => {
+    return () => {
+      stream?.getTracks().forEach((t) => t.stop());
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, [stream]);
+
+  // Attach stream to video element after it mounts (stream renders the <video> conditionally)
+  useEffect(() => {
+    if (!stream || !videoRef.current) return;
+    videoRef.current.srcObject = stream;
+    videoRef.current.play().catch(() => {});
+    videoRef.current.onloadedmetadata = () => {
+      if (!videoRef.current) return;
+      setIsSbs(videoRef.current.videoWidth / videoRef.current.videoHeight > 1.8);
+    };
+  }, [stream]);
+
+  // Load cameras
+  useEffect(() => {
+    if (!kc.authenticated) return;
+    navigator.mediaDevices
+      .enumerateDevices()
+      .then((devs) => setBrowserCameras(devs.filter((d) => d.kind === 'videoinput')))
+      .catch(() => setBrowserCameras([]));
+  }, []);
+
+  // Load passports for selected quarry (only APPROVED / ACTIVE)
+  useEffect(() => {
+    if (!selectedQuarryId) { setAnalysisPassports([]); return; }
+    api.passports.list(selectedQuarryId).then((all) =>
+      setAnalysisPassports(
+        all.filter((p) => ['approved', 'active'].includes(p.status.toLowerCase())),
+      ),
+    ).catch(() => setAnalysisPassports([]));
+  }, [selectedQuarryId]);
+
+  async function handleSelectCamera(deviceId: string) {
+    stream?.getTracks().forEach((t) => t.stop());
+    setStream(null);
+    setSelectedCamId(deviceId);
+    setIsSbs(false);
+
+    try {
+      const realDeviceId = browserCameras.find(
+        (c, i) => (c.deviceId || `cam-${i}`) === deviceId
+      )?.deviceId;
+      const newStream = await navigator.mediaDevices.getUserMedia({
+        video: realDeviceId ? { deviceId: { exact: realDeviceId } } : true,
+      });
+      setStream(newStream);
+      // srcObject is attached in useEffect after <video> mounts
+    } catch (err) {
+      setLaunchError(`Нет доступа к камере: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  function handleCapture() {
+    if (!videoRef.current || !stream) return;
+    if (!videoRef.current.videoWidth || !videoRef.current.videoHeight) return;
+    const { left, right } = captureFrameFromVideo(videoRef.current);
+    const id = crypto.randomUUID();
+    const idx = nextFrameIndex;
+
+    const newFrames: CapturedFrame[] = [
+      {
+        id,
+        blob: left.blob,
+        dataUrl: left.dataUrl,
+        width: videoRef.current.videoWidth / (right ? 2 : 1),
+        height: videoRef.current.videoHeight,
+        artifactType: 'left_frame',
+        frameIndex: idx,
+        capturedAt: Date.now(),
+      },
+    ];
+
+    if (right) {
+      newFrames.push({
+        id: crypto.randomUUID(),
+        blob: right.blob,
+        dataUrl: right.dataUrl,
+        width: videoRef.current.videoWidth / 2,
+        height: videoRef.current.videoHeight,
+        artifactType: 'right_frame',
+        frameIndex: idx,
+        capturedAt: Date.now(),
+      });
+    }
+
+    setFrames((prev) => [...prev, ...newFrames]);
+    setNextFrameIndex((n) => n + 1);
+  }
+
+  function handleDeleteFrame(frameId: string) {
+    setFrames((prev) => prev.filter((f) => f.id !== frameId));
+  }
+
+  async function handleLaunch() {
+    if (!selectedQuarryId || !analysisPassportId) return;
+    const leftFrames = frames.filter((f) => f.artifactType === 'left_frame');
+    if (leftFrames.length === 0) return;
+
+    setLaunchError(null);
+    setCurrentJob(null);
+    setJobResult(null);
+
+    try {
+      setLaunchStep('Подготовка устройства...');
+      setLaunchState('uploading');
+
+      // Ensure device exists — create default ZED 2 if none registered yet
+      let devices = await api.devices.list();
+      if (devices.length === 0) {
+        try {
+          await api.devices.create({ serial_number: 'ZED2-001', model: 'ZED 2' });
+        } catch {
+          // 409 = already exists (race) — re-fetch
+        }
+        devices = await api.devices.list();
+        if (devices.length === 0) throw new Error('Не удалось зарегистрировать устройство. Обратитесь к администратору.');
+      }
+      const device = devices[0];
+
+      // Ensure calibration exists — create default if none
+      let cals = await api.devices.listCalibrations(device.id);
+      if (cals.length === 0) {
+        await api.devices.addCalibration(device.id, {
+          left_camera_matrix:  { fx: 700, fy: 700, cx: 640, cy: 360 },
+          right_camera_matrix: { fx: 700, fy: 700, cx: 640, cy: 360 },
+          left_dist_coeffs:    { k1: 0, k2: 0, p1: 0, p2: 0, k3: 0 },
+          right_dist_coeffs:   { k1: 0, k2: 0, p1: 0, p2: 0, k3: 0 },
+          rotation_matrix:     { data: [1, 0, 0, 0, 1, 0, 0, 0, 1] },
+          translation_vector:  { data: [-0.12, 0, 0] },
+          baseline_mm: 120,
+          image_width_px: 1280,
+          image_height_px: 720,
+        });
+        cals = await api.devices.listCalibrations(device.id);
+      }
+      const cal = cals[0];
+
+      setLaunchStep('Проверяю запись взрыва...');
+      try {
+        await api.blastEvents.get(selectedQuarryId, analysisPassportId);
+      } catch {
+        await api.blastEvents.create(selectedQuarryId, analysisPassportId, {
+          blast_datetime: new Date().toISOString(),
+        });
+      }
+
+      setLaunchStep('Создаю сессию съёмки...');
+      const session = await api.captureFlow.createSession(selectedQuarryId, analysisPassportId, {
+        device_id: device.id,
+        calibration_id: cal.id,
+      });
+      setSessionId(session.id);
+
+      const allFrames = frames;
+      for (const frame of allFrames) {
+        setLaunchStep(`Загружаю ${frame.artifactType} #${frame.frameIndex}...`);
+        const file = new File([frame.blob], `${frame.artifactType}_${frame.frameIndex}.jpg`, {
+          type: 'image/jpeg',
+        });
+        await api.captureFlow.uploadArtifact(
+          session.id,
+          file,
+          frame.artifactType,
+          frame.frameIndex,
+        );
+      }
+
+      setLaunchStep('Ставлю задачу в очередь...');
+      const job = await api.captureFlow.enqueueJob(session.id);
+      setCurrentJob(job);
+      setLaunchState('enqueued');
+      startPolling(session.id, job.id);
+
+    } catch (err) {
+      setLaunchError(err instanceof Error ? err.message : String(err));
+      setLaunchState('failed');
+    }
+  }
+
+  function startPolling(sid: string, jid: string) {
+    setLaunchState('polling');
+    pollRef.current = setInterval(() => {
+      void (async () => {
+        try {
+          const j = await api.captureFlow.pollJob(sid, jid);
+          setCurrentJob(j);
+          if (j.status === 'completed') {
+            clearInterval(pollRef.current!); pollRef.current = null;
+            try {
+              const result = await api.captureFlow.getJobResult(sid, j.id);
+              setJobResult(result);
+            } catch { /* result not yet written */ }
+            setLaunchState('completed');
+          } else if (j.status === 'failed') {
+            clearInterval(pollRef.current!); pollRef.current = null;
+            setLaunchError(j.error_message ?? 'Ошибка воркера');
+            setLaunchState('failed');
+          }
+        } catch { /* network error — keep polling */ }
+      })();
+    }, 3000);
+  }
+
+  function handleReset() {
+    if (pollRef.current) clearInterval(pollRef.current);
+    setLaunchState('idle');
+    setLaunchStep('');
+    setCurrentJob(null);
+    setJobResult(null);
+    setSessionId(null);
+    setLaunchError(null);
+    setFrames([]);
+    setNextFrameIndex(0);
+  }
+
+  const isBusy = !['idle', 'completed', 'failed'].includes(launchState);
+  const hasLeftFrame = frames.some((f) => f.artifactType === 'left_frame');
+  const canLaunch = !!selectedQuarryId && !!analysisPassportId && hasLeftFrame && !isBusy;
+  const isMock = JSON.stringify(currentJob?.pipeline_log ?? {}).toLowerCase().includes('synthetic');
+
   return (
-    <section className="data-panel">
-      <PanelTitle icon={BarChart3} title="Анализ изображений" />
-      <div
-        style={{
-          padding: "48px 0",
-          textAlign: "center",
-          color: "var(--muted)",
-          display: "grid",
-          gap: 12,
-          justifyItems: "center",
-        }}
-      >
-        <ImageUp style={{ width: 48, height: 48, opacity: 0.4 }} aria-hidden="true" />
-        <p style={{ margin: 0, fontSize: "1.05rem", color: "var(--ink)" }}>
-          Запуск анализа выполняется через мобильное приложение ZMetrics.
-        </p>
-        <p style={{ margin: 0 }}>Результаты появятся в разделе «Отчёты» после завершения.</p>
-      </div>
-    </section>
+    <div className="analysis-screen">
+        <h2>Анализ развала — захват с камеры</h2>
+
+        {/* 1. ПАСПОРТ */}
+        <section className="form-section">
+          <h3>1. Паспорт</h3>
+          <div className="form-row">
+            <label>Карьер</label>
+            <select
+              value={selectedQuarryId ?? ''}
+              onChange={(e) => { onSelectQuarry(e.target.value || null); setAnalysisPassportId(null); }}
+              disabled={isBusy}
+            >
+              <option value="">— выберите карьер —</option>
+              {quarries.map((q) => <option key={q.id} value={q.id}>{q.name}</option>)}
+            </select>
+          </div>
+          <div className="form-row">
+            <label>Паспорт</label>
+            <select
+              value={analysisPassportId ?? ''}
+              onChange={(e) => setAnalysisPassportId(e.target.value || null)}
+              disabled={!selectedQuarryId || isBusy}
+            >
+              <option value="">— выберите паспорт (APPROVED / ACTIVE) —</option>
+              {analysisPassports.map((p) => (
+                <option key={p.id} value={p.id}>
+                  #{p.revision_number} · {p.status} · P80 цель: {p.target_p80_mm ?? '—'} мм
+                </option>
+              ))}
+            </select>
+            {selectedQuarryId && analysisPassports.length === 0 && (
+              <span className="analysis-hint analysis-hint--warning">
+                Нет паспортов APPROVED/ACTIVE. Перейдите в Паспорта и утвердите паспорт.
+              </span>
+            )}
+          </div>
+        </section>
+
+        {/* 2. КАМЕРА */}
+        <section className="form-section">
+          <h3>2. Камера</h3>
+          <div className="form-row">
+            <label>Устройство</label>
+            <select
+              value={selectedCamId ?? ''}
+              onChange={(e) => { if (e.target.value !== '') void handleSelectCamera(e.target.value); }}
+              disabled={isBusy}
+            >
+              <option value="">— выберите камеру —</option>
+              {browserCameras.map((c, i) => (
+                <option key={c.deviceId || `cam-${i}`} value={c.deviceId || `cam-${i}`}>
+                  {c.label || `Камера ${i + 1}`}
+                </option>
+              ))}
+            </select>
+            {browserCameras.length === 0 && (
+              <span className="analysis-hint analysis-hint--warning">
+                Камеры не найдены. Разрешите доступ к камере в браузере.
+              </span>
+            )}
+          </div>
+
+          {stream && (
+            <div className="camera-preview">
+              {isSbs && (
+                <p className="analysis-hint analysis-hint--ok">
+                  ✓ Обнаружен SBS-режим (ZED 2) — кадр будет автоматически разделён на left+right
+                </p>
+              )}
+              <video
+                ref={videoRef}
+                autoPlay
+                muted
+                playsInline
+                className="camera-preview__video"
+              />
+              <button
+                className="primary"
+                onClick={handleCapture}
+                disabled={isBusy}
+              >
+                📸 Сделать снимок {isSbs ? '(stereo)' : ''}
+              </button>
+            </div>
+          )}
+        </section>
+
+        {/* 3. ГАЛЕРЕЯ КАДРОВ */}
+        {frames.length > 0 && (
+          <section className="form-section">
+            <h3>3. Кадры ({frames.length})</h3>
+            <div className="frame-gallery">
+              {frames.map((f) => (
+                <div
+                  key={f.id}
+                  className="frame-thumb"
+                >
+                  <img
+                    src={f.dataUrl}
+                    alt={`${f.artifactType} #${f.frameIndex}`}
+                  />
+                  <div className="frame-thumb__meta">
+                    {f.artifactType === 'left_frame' ? 'L' : 'R'} #{f.frameIndex}
+                  </div>
+                  <button
+                    onClick={() => handleDeleteFrame(f.id)}
+                    disabled={isBusy}
+                    className="frame-thumb__delete"
+                    aria-label="Удалить кадр"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* 4. АНАЛИЗ */}
+        <section className="form-section">
+          <h3>4. Анализ</h3>
+          <div className="form-row">
+            {launchState === 'idle' && (
+              <button className="primary" disabled={!canLaunch} onClick={() => void handleLaunch()}>
+                Отправить на анализ ({frames.filter((f) => f.artifactType === 'left_frame').length} left
+                {frames.some((f) => f.artifactType === 'right_frame') ? ' + right' : ''})
+              </button>
+            )}
+            {isBusy && (
+              <button className="primary" disabled>Выполняется...</button>
+            )}
+            {(launchState === 'completed' || launchState === 'failed') && (
+              <button className="secondary" onClick={handleReset}>Новый захват</button>
+            )}
+          </div>
+
+          {(launchState === 'uploading' || launchState === 'enqueued') && (
+            <div className="analysis-banner info-banner"><span className="spinner" /> {launchStep}</div>
+          )}
+          {launchState === 'polling' && currentJob && (
+            <div className="analysis-banner info-banner">
+              <span className="spinner" /> Воркер: <strong>{currentJob.status}</strong>
+            </div>
+          )}
+
+          {launchState === 'completed' && (
+            <div className="analysis-banner success-banner">
+              ✅ Анализ завершён
+              {isMock && <span className="badge-mock"> ⚠ Синтетические данные</span>}
+              {jobResult?.p80_mm != null && (
+                <div className="analysis-result-line">
+                  P80: <strong>{jobResult.p80_mm.toFixed(0)} мм</strong>
+                  {jobResult.confidence_score != null && (
+                    <> · Уверенность: <strong>{jobResult.confidence_score.toFixed(2)}</strong></>
+                  )}
+                </div>
+              )}
+              <button
+                className="primary"
+                onClick={() => onNavigate('reports')}
+              >
+                Открыть отчёт
+              </button>
+            </div>
+          )}
+
+          {launchState === 'failed' && launchError && (
+            <div className="analysis-banner error-banner">❌ {launchError}</div>
+          )}
+
+          {sessionId && (
+            <details className="analysis-details">
+              <summary>Технические детали</summary>
+              <div>Session: {sessionId}</div>
+              {currentJob && <div>Job: {currentJob.id} · {currentJob.status}</div>}
+              {currentJob?.pipeline_log && (
+                <pre>
+                  {JSON.stringify(currentJob.pipeline_log, null, 2)}
+                </pre>
+              )}
+            </details>
+          )}
+        </section>
+    </div>
   );
 }
 
@@ -1289,13 +2365,36 @@ function ReportsPage({
   onSelectQuarry,
   reports,
   onLoadRecommendations,
+  onError,
 }: {
   quarries: Quarry[];
   selectedQuarryId: string | null;
   onSelectQuarry: (id: string) => void;
   reports: Report[];
   onLoadRecommendations: (reportId: string) => Promise<void>;
+  onError: (message: string) => void;
 }) {
+  const [query, setQuery] = useState("");
+  const [sortMode, setSortMode] = useState<"newest" | "oldest" | "title">("newest");
+
+  const visibleReports = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    const filtered = normalized
+      ? reports.filter((report) =>
+          `${report.title} ${report.report_type} ${report.analysis_method}`
+            .toLowerCase()
+            .includes(normalized),
+        )
+      : reports;
+
+    return [...filtered].sort((a, b) => {
+      if (sortMode === "title") return a.title.localeCompare(b.title, "ru");
+      const aTime = new Date(a.created_at).getTime();
+      const bTime = new Date(b.created_at).getTime();
+      return sortMode === "newest" ? bTime - aTime : aTime - bTime;
+    });
+  }, [query, reports, sortMode]);
+
   const handleDownload = async (report: Report) => {
     try {
       await downloadWithAuth(
@@ -1304,36 +2403,43 @@ function ReportsPage({
       );
     } catch (err) {
       console.error("Download failed:", err);
+      onError("Не удалось скачать JSON отчета");
     }
   };
 
   return (
     <section className="data-panel">
       <PanelTitle icon={FileText} title="Сформированные отчеты" />
-      <div style={{ marginBottom: 14 }}>
+      <div className="toolbar report-toolbar">
+        <label className="search-box">
+          <Search aria-hidden="true" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Поиск отчетов"
+            aria-label="Поиск отчетов"
+          />
+        </label>
+        <select
+          className="control-select"
+          value={sortMode}
+          onChange={(e) => setSortMode(e.target.value as typeof sortMode)}
+          aria-label="Сортировка отчетов"
+        >
+          <option value="newest">Сначала новые</option>
+          <option value="oldest">Сначала старые</option>
+          <option value="title">По названию</option>
+        </select>
         <QuarrySelect quarries={quarries} value={selectedQuarryId} onChange={onSelectQuarry} />
       </div>
       <div className="report-list">
-        {reports.map((report) => (
+        {visibleReports.map((report) => (
           <article className="report-row" key={report.id}>
             <div>
               <strong>{report.title}</strong>
               <span>{report.report_type}</span>
               {report.analysis_method === "mock" && (
-                <span
-                  style={{
-                    background: "#fff1f2",
-                    color: "var(--rose)",
-                    borderRadius: 6,
-                    padding: "2px 8px",
-                    fontSize: "0.78rem",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 4,
-                  }}
-                >
-                  ⚠ Синтетические данные
-                </span>
+                <span className="warning-badge">Синтетические данные</span>
               )}
             </div>
             <span>{new Date(report.created_at).toLocaleDateString("ru-RU")}</span>
@@ -1351,8 +2457,16 @@ function ReportsPage({
             </button>
           </article>
         ))}
-        {reports.length === 0 && (
-          <p style={{ color: "var(--muted)", margin: 0 }}>Нет отчетов для выбранного карьера</p>
+        {visibleReports.length === 0 && (
+          <EmptyState
+            icon={FileText}
+            title="Отчеты не найдены"
+            description={
+              reports.length === 0
+                ? "После завершения анализа отчеты появятся здесь."
+                : "Попробуйте изменить поисковый запрос или сортировку."
+            }
+          />
         )}
       </div>
     </section>
@@ -1372,9 +2486,11 @@ function RecommendationsPage({
 }) {
   if (recommendations.length === 0) {
     return (
-      <div className="data-panel" style={{ padding: 24, color: "var(--muted)" }}>
-        Выберите отчет в разделе «Отчёты» и нажмите «Рекомендации» для загрузки.
-      </div>
+      <EmptyState
+        icon={Sparkles}
+        title="Рекомендации не выбраны"
+        description="Откройте отчет и нажмите «Рекомендации», чтобы загрузить предложения по параметрам БВР."
+      />
     );
   }
 
@@ -1483,27 +2599,20 @@ function QuarrySelect({
   quarries,
   value,
   onChange,
-  style,
+  className,
 }: {
   quarries: Quarry[];
   value: string | null;
   onChange: (id: string) => void;
-  style?: CSSProperties;
+  className?: string;
 }) {
   return (
     <select
+      className={className ? `control-select ${className}` : "control-select"}
       value={value ?? ""}
       onChange={(e) => onChange(e.target.value)}
-      style={{
-        minHeight: 38,
-        border: "1px solid var(--line)",
-        borderRadius: 8,
-        padding: "0 12px",
-        background: "white",
-        color: "var(--ink)",
-        font: "inherit",
-        ...style,
-      }}
+      disabled={quarries.length === 0}
+      aria-label="Выберите карьер"
     >
       <option value="" disabled>
         Выберите карьер
@@ -1517,7 +2626,7 @@ function QuarrySelect({
   );
 }
 
-function PanelTitle({ icon: Icon, title }: { icon: typeof Activity; title: string }) {
+function PanelTitle({ icon: Icon, title }: { icon: NavItem["icon"]; title: string }) {
   return (
     <div className="panel-title">
       <Icon aria-hidden="true" />
@@ -1532,7 +2641,7 @@ function MetricCard({
   value,
   tone,
 }: {
-  icon: typeof Activity;
+  icon: NavItem["icon"];
   label: string;
   value: string;
   tone: string;
@@ -1562,32 +2671,81 @@ function Histogram({ fractions }: { fractions: Fraction[] }) {
   );
 }
 
+type SectionSortKey = "name" | "block_number" | "description";
+
 function SectionTable({ rows }: { rows: SiteSection[] }) {
+  const [sortKey, setSortKey] = useState<SectionSortKey>("name");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+
+  const sortedRows = useMemo(() => {
+    return [...rows].sort((a, b) => {
+      const left = String(a[sortKey] ?? "").toLowerCase();
+      const right = String(b[sortKey] ?? "").toLowerCase();
+      const result = left.localeCompare(right, "ru", { numeric: true });
+      return sortDirection === "asc" ? result : -result;
+    });
+  }, [rows, sortDirection, sortKey]);
+
+  const toggleSort = (key: SectionSortKey) => {
+    if (sortKey === key) {
+      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setSortKey(key);
+    setSortDirection("asc");
+  };
+
+  const sortLabel = (key: SectionSortKey) =>
+    sortKey === key ? (sortDirection === "asc" ? " ↑" : " ↓") : "";
+
+  if (rows.length === 0) {
+    return (
+      <EmptyState
+        icon={MapPinned}
+        title="Участки не найдены"
+        description="Добавьте первый участок для выбранного карьера или измените поисковый запрос."
+      />
+    );
+  }
+
   return (
     <div className="table-wrap">
       <table>
         <thead>
           <tr>
-            <th>Участок</th>
-            <th>Блок</th>
-            <th>Описание</th>
+            <th>
+              <button className="table-sort" type="button" onClick={() => toggleSort("name")}>
+                Участок{sortLabel("name")}
+              </button>
+            </th>
+            <th>
+              <button
+                className="table-sort"
+                type="button"
+                onClick={() => toggleSort("block_number")}
+              >
+                Блок{sortLabel("block_number")}
+              </button>
+            </th>
+            <th>
+              <button
+                className="table-sort"
+                type="button"
+                onClick={() => toggleSort("description")}
+              >
+                Описание{sortLabel("description")}
+              </button>
+            </th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((sec) => (
+          {sortedRows.map((sec) => (
             <tr key={sec.id}>
-              <td>{sec.name}</td>
-              <td>{sec.block_number ?? "—"}</td>
-              <td>{sec.description ?? "—"}</td>
+              <td data-label="Участок">{sec.name}</td>
+              <td data-label="Блок">{sec.block_number ?? "—"}</td>
+              <td data-label="Описание">{sec.description ?? "—"}</td>
             </tr>
           ))}
-          {rows.length === 0 && (
-            <tr>
-              <td colSpan={3} style={{ color: "var(--muted)", textAlign: "center" }}>
-                Нет данных
-              </td>
-            </tr>
-          )}
         </tbody>
       </table>
     </div>

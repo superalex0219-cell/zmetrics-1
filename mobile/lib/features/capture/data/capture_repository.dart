@@ -18,6 +18,13 @@ const String kOpCreateCaptureSession = 'create_capture_session';
 /// the SyncProcessor when connectivity returns.
 abstract class CaptureRepository {
   Future<CaptureSession> createCaptureSession(NewCaptureSession draft);
+  Future<CaptureSession> createCaptureSessionOnline(NewCaptureSession draft);
+  Future<void> uploadFrameArtifact(
+    String captureSessionId,
+    List<int> jpegBytes, {
+    required String artifactType,
+    required int frameIndex,
+  });
   Future<List<CaptureSession>> listSessions(String quarryId, String passportId);
   Future<AnalysisJob> triggerAnalysis(String captureSessionId);
   Future<List<AnalysisJob>> listJobs(String captureSessionId);
@@ -54,6 +61,38 @@ class MockCaptureRepository implements CaptureRepository {
     );
     _sessions.add(session);
     return session;
+  }
+
+  @override
+  Future<CaptureSession> createCaptureSessionOnline(
+      NewCaptureSession draft) async {
+    final session = CaptureSession(
+      id: _uuid.v4(),
+      blastEventId: draft.blastEventId,
+      deviceId: draft.deviceId,
+      calibrationId: draft.calibrationId,
+      frameCount: draft.frameCount,
+      createdAt: DateTime.now(),
+      synced: true,
+    );
+    _sessions.add(session);
+    return session;
+  }
+
+  @override
+  Future<void> uploadFrameArtifact(
+    String captureSessionId,
+    List<int> jpegBytes, {
+    required String artifactType,
+    required int frameIndex,
+  }) async {
+    final idx = _sessions.indexWhere((s) => s.id == captureSessionId);
+    if (idx == -1) {
+      throw ApiException('Capture session not found', statusCode: 404);
+    }
+    _sessions[idx] = _sessions[idx].copyWith(
+      frameCount: _sessions[idx].frameCount + 1,
+    );
   }
 
   @override
@@ -111,6 +150,50 @@ class RemoteCaptureRepository implements CaptureRepository {
       createdAt: DateTime.now(),
       synced: false,
     );
+  }
+
+  @override
+  Future<CaptureSession> createCaptureSessionOnline(
+      NewCaptureSession draft) async {
+    try {
+      final res = await _dio.post(
+        '/api/v1/quarries/${draft.quarryId}/passports/${draft.passportId}/blast-event/capture-sessions',
+        data: {
+          'device_id': draft.deviceId,
+          'calibration_id': draft.calibrationId,
+          'capture_datetime': draft.captureDateTime,
+        },
+      );
+      return CaptureSession.fromJson(res.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
+  }
+
+  @override
+  Future<void> uploadFrameArtifact(
+    String captureSessionId,
+    List<int> jpegBytes, {
+    required String artifactType,
+    required int frameIndex,
+  }) async {
+    try {
+      final form = FormData.fromMap({
+        'artifact_type': artifactType,
+        'frame_index': frameIndex.toString(),
+        'file': MultipartFile.fromBytes(
+          jpegBytes,
+          filename: '${artifactType}_$frameIndex.jpg',
+          contentType: DioMediaType('image', 'jpeg'),
+        ),
+      });
+      await _dio.post(
+        '/api/v1/capture-sessions/$captureSessionId/artifacts',
+        data: form,
+      );
+    } on DioException catch (e) {
+      throw ApiException.fromDio(e);
+    }
   }
 
   /// Drains one queued capture-session create. Used by the SyncProcessor.

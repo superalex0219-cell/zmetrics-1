@@ -1,10 +1,15 @@
 import Keycloak from "keycloak-js";
 
 import type {
+  AnalysisJob,
   AnalysisResult,
+  Artifact,
   AuditLogEntry,
   BlastEvent,
   BlastPassport,
+  Calibration,
+  CaptureSession,
+  Device,
   Paginated,
   Quarry,
   Recommendation,
@@ -85,10 +90,24 @@ export const api = {
   quarries: {
     list: () =>
       get<Paginated<Quarry>>("/quarries").then((p) => p.items),
+    create: (body: {
+      name: string;
+      location_description?: string | null;
+      latitude?: number | null;
+      longitude?: number | null;
+    }) => post<Quarry>("/quarries", body),
   },
   sections: {
     list: (quarryId: string) =>
       get<Paginated<SiteSection>>(`/quarries/${quarryId}/sections`).then((p) => p.items),
+    create: (
+      quarryId: string,
+      body: {
+        name: string;
+        block_number?: string | null;
+        description?: string | null;
+      },
+    ) => post<SiteSection>(`/quarries/${quarryId}/sections`, body),
   },
   passports: {
     list: (quarryId: string) =>
@@ -145,5 +164,54 @@ export const api = {
   },
   analysisResults: {
     get: (id: string) => get<AnalysisResult>(`/analysis-results/${id}`),
+  },
+  devices: {
+    list: () => get<Paginated<Device>>('/devices').then((p) => p.items),
+    create: (body: { serial_number: string; model: string; firmware_version?: string | null }) =>
+      post<Device>('/devices', body),
+    listCalibrations: (deviceId: string) =>
+      get<Paginated<Calibration>>(`/devices/${deviceId}/calibrations`).then((p) => p.items),
+    addCalibration: (deviceId: string, body: Record<string, unknown>) =>
+      post<Calibration>(`/devices/${deviceId}/calibrations`, body),
+  },
+  captureFlow: {
+    createSession: (
+      quarryId: string,
+      passportId: string,
+      body: { device_id: string; calibration_id: string },
+    ) =>
+      post<CaptureSession>(
+        `/quarries/${quarryId}/passports/${passportId}/blast-event/capture-sessions`,
+        body,
+      ),
+
+    uploadArtifact: async (
+      sessionId: string,
+      file: File,
+      artifactType: 'left_frame' | 'right_frame',
+      frameIndex: number,
+    ): Promise<Artifact> => {
+      const formData = new FormData();
+      formData.append('artifact_type', artifactType);
+      formData.append('frame_index', String(frameIndex));
+      formData.append('file', file);
+      const headers = await authHeader();
+      const res = await fetch(`${API_BASE}/v1/capture-sessions/${sessionId}/artifacts`, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+      return res.json() as Promise<Artifact>;
+    },
+
+    enqueueJob: (sessionId: string) =>
+      post<AnalysisJob>(`/captures/${sessionId}/jobs`, {}),
+
+    pollJob: (sessionId: string, jobId: string) =>
+      get<AnalysisJob>(`/captures/${sessionId}/jobs/${jobId}`),
+
+    getJobResult: (sessionId: string, jobId: string) =>
+      get<AnalysisResult>(`/captures/${sessionId}/jobs/${jobId}/result`),
   },
 };

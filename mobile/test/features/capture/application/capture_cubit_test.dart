@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:zmetrics_mobile/features/capture/application/capture_cubit.dart';
 import 'package:zmetrics_mobile/features/capture/data/capture_repository.dart';
@@ -24,6 +26,25 @@ class _TerminalJobRepo implements CaptureRepository {
   @override
   Future<CaptureSession> createCaptureSession(NewCaptureSession draft) async =>
       CaptureSession(id: 'sess-x', blastEventId: '');
+
+  @override
+  Future<CaptureSession> createCaptureSessionOnline(
+          NewCaptureSession draft) async =>
+      CaptureSession(
+        id: 'sess-x',
+        blastEventId: '',
+        deviceId: draft.deviceId,
+        calibrationId: draft.calibrationId,
+        frameCount: draft.frameCount,
+      );
+
+  @override
+  Future<void> uploadFrameArtifact(
+    String captureSessionId,
+    List<int> jpegBytes, {
+    required String artifactType,
+    required int frameIndex,
+  }) async {}
 
   @override
   Future<AnalysisJob> triggerAnalysis(String captureSessionId) async => _job;
@@ -101,6 +122,25 @@ void main() {
       expect(_loaded(cubit).value.sessions, hasLength(1));
       await cubit.close();
     });
+
+    test('online OTG path uploads stereo frames and starts polling', () async {
+      final cubit = _mockCubit();
+      await cubit.load();
+      await cubit.selectDevice('mock-device-001');
+      cubit.selectCalibration('mock-cal-001');
+
+      final job = await cubit.uploadStereoFramesAndTrigger(
+        leftJpeg: Uint8List.fromList([0xff, 0xd8, 0xff, 0xd9]),
+        rightJpeg: Uint8List.fromList([0xff, 0xd8, 0xff, 0xd9]),
+      );
+
+      final view = _loaded(cubit).value;
+      expect(job.captureSessionId, view.sessions.first.id);
+      expect(view.sessions.first.synced, isTrue);
+      expect(view.sessions.first.frameCount, 2);
+      expect(view.pollingJob, isNotNull);
+      await cubit.close();
+    });
   });
 
   group('CaptureCubit.pollJobUntilTerminal', () {
@@ -140,7 +180,9 @@ void main() {
         captureSessionId: 'sess-y',
         status: AnalysisJobStatus.running,
       );
-      final completedJob = runningJob.copyWith(status: AnalysisJobStatus.completed);
+      final completedJob = runningJob.copyWith(
+        status: AnalysisJobStatus.completed,
+      );
 
       // Repo returns running twice, then completed.
       final repo = _CallCountingRepo(
@@ -182,6 +224,25 @@ class _CallCountingRepo implements CaptureRepository {
   @override
   Future<CaptureSession> createCaptureSession(NewCaptureSession draft) async =>
       CaptureSession(id: 'sess-y', blastEventId: '');
+
+  @override
+  Future<CaptureSession> createCaptureSessionOnline(
+          NewCaptureSession draft) async =>
+      CaptureSession(
+        id: 'sess-y',
+        blastEventId: '',
+        deviceId: draft.deviceId,
+        calibrationId: draft.calibrationId,
+        frameCount: draft.frameCount,
+      );
+
+  @override
+  Future<void> uploadFrameArtifact(
+    String captureSessionId,
+    List<int> jpegBytes, {
+    required String artifactType,
+    required int frameIndex,
+  }) async {}
 
   @override
   Future<AnalysisJob> triggerAnalysis(String captureSessionId) async =>
