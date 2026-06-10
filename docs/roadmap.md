@@ -1,6 +1,6 @@
 # ZMetrics — Roadmap
 
-Last sync: 2026-06-10 | HEAD: `4aa677b`
+Last sync: 2026-06-11 | HEAD: `0d9388f`
 
 > **⚠ Архитектурный пивот 2026-06-10:** React-веб (`frontend/`) и Flutter-mobile (`mobile/`)
 > упраздняются в пользу единого десктоп-клиента **Python + PySide6** (`desktop/`, Windows-first).
@@ -95,6 +95,36 @@ Last sync: 2026-06-10 | HEAD: `4aa677b`
 - [x] Worker image rebuilt and running with CUDA PyTorch cu128 (`torch 2.11.0+cu128`, `torchvision 0.26.0+cu128`)
 - [x] Local GPU smoke: `rock-sample.png` -> 77 SAM3 masks
 - [x] Container GPU smoke: `rock-sample.png` -> 77 SAM3 masks, CUDA, ~5.9s
+
+### DEPTH-2 — IGEV++ neural stereo depth · `worker/` (`411ece0`, 2026-06-10)
+- [x] Vendored IGEV++ (MIT) + `IGEVDepthStep` (`cv_depth_igev.py`), тот же контракт артефактов, что SGBM
+- [x] `DEPTH_BACKEND=sgbm|igev` (default sgbm); веса `infra/models/igev/` (gitignore), compose mount, GPU overlay
+- [x] Даунскейл инференса до `IGEV_MAX_INFERENCE_WIDTH=1536`, диспаритет рескейлится обратно
+- [x] Проверен на RTX 5080: 2.2K кадр → 2.74M валидных точек, 100% покрытие
+- [ ] *Follow-up (DEPTH-3):* left-right consistency → occlusion mask + честный confidence шага;
+      валидация по эталонному объекту (~200мм маркер) SGBM vs IGEV
+
+### M2 — Real CV stereo · `worker/` + `desktop/` (validated 2026-06-10 on ZED 2)
+- [x] `cv_calibration` / `cv_rectification` / `cv_depth` (SGBM) / `cv_pointcloud` за `ENABLE_REAL_STEREO`
+- [x] Заводская калибровка ZED по серийнику: `desktop/.../capture/zed_calibration.py` + кнопка
+      «Зарегистрировать ZED» на экране съёмки (`2925d7d`); conf SN21907252 в репо
+- [x] E2E на железе: `scripts/e2e_capture_smoke.py` (ZED 2 → rectify → depth → SAM3 → результат)
+
+### M3-PART — Реальные particle volumes + granulometry · `worker/` (`0a4d5dc`, 2026-06-11)
+- [x] `CVParticleVolumeStep`: SAM3-полигоны → ректифицированное пространство (`undistortPoints(R1,P1)`),
+      медианная глубина по маске, метрические размеры; юнит-агностичность `baseline_mm/‖T‖`
+- [x] `CVGranulometryStep`: объёмно-взвешенный кумулятив, P10/P50/P80, RR-fit, вычисляемый confidence,
+      provenance в notes (segmentation/depth/calibration_id)
+- [x] SAFETY: 0 камней → NULL-результат, отчёт/рекомендация не создаются; заголовок отчёта различает real CV/mock
+- [x] Отказ от заглушечной калибровки с понятной ошибкой; reshape плоских матриц (`0d9388f`)
+- [ ] Прогон на железе (пересборка worker сделана; нужен снимок реального развала)
+
+### CAPTURE-UX — Удобная съёмка · `desktop/` (`2925d7d` → `0d9388f`, 2026-06-11)
+- [x] Авто-старт превью, авто-выбор ZED; чек-лист готовности вместо молча серой кнопки
+- [x] «Зарегистрировать ZED»: заводская калибровка по серийнику прямо из UI (409 → reuse устройства)
+- [x] Предупреждение при съёмке стерео с TEST-устройством
+- [x] Фиксы: non-contiguous буфер превью; stale карта доступов (`/me/access` ретраи + refresh после
+      создания карьера/смены ролей); grant поверх роли = смена роли (upsert, без 500)
 
 ### WEB-2 — Passport workflow in web · `frontend/` (`849e1f9`)
 - [x] Passport detail panel: all fields, colored status badge, click-to-open from list
@@ -249,6 +279,119 @@ Bug hunts are periodic code-review tasks run by an executor agent (no UI needed)
 
 ---
 
+## PRODUCT BACKLOG — запрос владельца продукта 2026-06-11
+
+*Предлагаемый порядок (обсуждаемо): CAP-MULTI и AUTH-2 — самые болезненные в ежедневной
+работе; затем REPORT-X → EDIT-1 → CAM-CUSTOM → UI-2; M5-d — параллельная
+исследовательская ветка; STORE-1 закрывается по ходу REPORT-X.*
+
+### CAP-MULTI — Несколько фотографий к одному взрыву · `desktop/` + `backend/`
+*Сценарий: выбрать карьер → создать/открыть взрыв → загрузить набор фото → каждое
+фото привязано к этому взрыву, с метаданными (дата, пользователь, карьер, взрыв,
+тип изображения, статус обработки).*
+
+- [ ] Backend: `CaptureSession` уже 1→M к `BlastEvent`, `Artifact` уже несёт
+      `frame_index`/`artifact_type`/`uploaded_by` — проверить, что один session
+      принимает серию пар кадров (frame_index 0..N) и что job обрабатывает выбранную пару;
+      добить недостающее (список сессий по взрыву с агрегатами)
+- [ ] Desktop: экран съёмки — серия снимков в одну сессию (кнопка «Снять ещё», галерея
+      превью с удалением до отправки), плюс «Загрузить с диска» (multi-select JPEG/PNG,
+      SBS-детект как в capture)
+- [ ] Отдельный анализ-джоб на каждую пару кадров; сводный статус по сессии
+- [ ] Список фото взрыва: миниатюры, тип (left/right/mono), статус обработки
+      (queued/running/completed/failed), кто и когда снял
+- [ ] Оффлайн: серия уходит в SyncManager одной составной операцией
+
+### AUTH-2 — Токены на рабочую смену · `infra/` + `desktop/`
+*Сейчас: OIDC PKCE + keyring + refresh-on-401 (однократный) уже работают.
+Боль: SSO-сессия истекает в середине смены и требует браузерного релогина.*
+
+- [ ] Realm: `accessTokenLifespan` ~15 мин (короткий access — норм), но
+      `ssoSessionIdleTimeout`/`ssoSessionMaxLifespan` ≥ 12 ч — refresh живёт всю смену
+      (обновить realm-export.json + kcadm на живом realm)
+- [ ] Desktop: проактивный refresh по таймеру до истечения (не ждать 401)
+- [ ] Desktop: refresh невозможен (смена кончилась) → понятный диалог «Сессия истекла,
+      войдите снова» вместо тихих 401 по всем экранам
+- [ ] Статус-бар: индикатор «Авторизован до HH:MM»
+
+### REPORT-X — Отчёты в PDF / DOCX / XLSX / CSV · `worker/` + `backend/` + `desktop/`
+*Сейчас: JSON-экспорт из десктопа. Состав отчёта: сегментация (оверлей масок),
+паспорт БВР, рекомендации, карта глубины (превью), исходные/обработанные снимки,
+параметры карьера и взрыва.*
+
+- [ ] Worker: шаг рендера отчёта (HTML-шаблон → PDF через WeasyPrint; DOCX через
+      python-docx; XLSX через openpyxl — грансостав таблицей; CSV — size_distribution)
+- [ ] Визуальные артефакты для отчёта: маски поверх кадра (PNG), колоризованная карта
+      глубины (PNG) — складывать в MinIO рядом с result.json
+- [ ] Backend: `GET /reports/{id}/export?format=pdf|docx|xlsx|csv|json` (стрим из MinIO,
+      генерация лениво при первом запросе)
+- [ ] Desktop: кнопки экспорта на экране отчёта; SAFETY: метод анализа (real CV / mock)
+      и статус рекомендации «требует проверки» — на видном месте каждого формата
+- [ ] В отчёт: блок паспорта БВР (параметры бурения/заряда), блок рекомендации
+      (текст + parameter_suggestions read-only)
+
+### EDIT-1 — Редактирование сущностей · `backend/` + `desktop/`
+*«Редактирование ко всему» — с оговорками безопасности: паспорт после SUBMITTED
+меняется только ревизией (supersede), AuditLog append-only, рекомендации — только статус.*
+
+- [ ] Backend: PATCH для quarry, site_section, device (model/notes), blast_event
+      (дата/фактическая взрывчатка), calibration (notes/is_active); паспорт: PATCH
+      только в DRAFT, дальше — revision-flow (уже есть)
+- [ ] AuditLog на каждое редактирование (entity_type + old/new value)
+- [ ] Desktop: формы редактирования на существующих экранах (карьеры, участки,
+      паспорта-DRAFT, устройства/калибровки), кнопка «Изменить» с ролевым гейтингом
+- [ ] Явный запрет в UI: не редактируются — утверждённые паспорта (только ревизия),
+      результаты анализа, аудит, рекомендации (только статус-кнопки)
+
+### CAM-CUSTOM — Нестандартные стереокамеры · `desktop/` + `backend/`
+*Свободная конфигурация: своя стереокамера (две UVC или одна SBS), ручной ввод/импорт
+калибровки, редактирование конфигурации камеры.*
+
+- [ ] Desktop: экран «Устройства»: список устройств/калибровок, создание устройства
+      с произвольной моделью, редактирование (EDIT-1)
+- [ ] Форма калибровки: ручной ввод fx/fy/cx/cy, дисторсий, R/T, baseline + валидация
+      правдоподобия (fx>50px и т.п. — worker уже отклоняет заглушки)
+- [ ] Импорт калибровки из файла: ZED .conf (есть), OpenCV .yml/.json (добавить)
+- [ ] Настройка SBS-раскладки: side-by-side / two-devices / top-bottom; порог аспекта
+      и индексы устройств в конфиге камеры
+- [ ] (Опционально) мастер калибровки шахматной доской через OpenCV — отдельная веха,
+      если ручного ввода/импорта не хватит
+
+### M5-d — ML-модель рекомендаций по паспорту БВР · `worker/` + `docs/`
+*Сейчас: rule engine (M5-a) + LLM-пояснения (M5-b). Цель: модель, связывающая параметры
+паспорта (burden/spacing/заряд/сетка) с прогнозом грансостава и рекомендациями.
+SAFETY: модель только предлагает; статус всегда requires_human_review; параметры
+никогда не применяются автоматически.*
+
+- [ ] Структура данных для обучения: датасет-схема «паспорт БВР (фичи) → измеренный
+      грансостав (P10/P50/P80, RR)» + экспорт исторических пар из БД (JSON/parquet)
+- [ ] Генератор синтетических обучающих данных для демо: Kuz-Ram / SveDeFo-based
+      симулятор (физически правдоподобные пары паспорт→фрагментация, с шумом)
+- [ ] Бейзлайн-модель: предсказание P80 по параметрам паспорта (gradient boosting /
+      регрессия; sklearn), метрики качества, сериализация как `ModelVersion`
+- [ ] Инференс в worker: рекомендация = rule engine + прогноз модели («при burden −0.3м
+      ожидаемый P80 ↓ на X%» — как справка), confidence + пометка «модель, демо-данные»
+- [ ] Вывод в UI (экран рекомендаций) и в REPORT-X отчётах
+
+### UI-2 — Современный интерфейс десктопа · `desktop/`
+- [ ] Единая тема (палитра, типографика, отступы) через QSS; тёмная/светлая
+- [ ] Иконки (Material/Lucide), консистентные кнопки/формы/таблицы
+- [ ] Карточная вёрстка дашборда, пустые состояния с подсказками-действиями
+- [ ] Тосты вместо красных строк ошибок; индикаторы загрузки
+- [ ] Ревизия навигации: группировка экранов, хлебные крошки в заголовке
+
+### STORE-1 — MinIO: полнота хранения · `backend/` + `worker/` *(почти готово)*
+*Уже в MinIO: исходные кадры (`zmetrics-frames`), обработанные артефакты — depth/disparity/
+point cloud/masks/result.json (`zmetrics-artifacts`). Остаток:*
+
+- [ ] Файлы отчётов (PDF/DOCX/XLSX из REPORT-X) → `zmetrics-artifacts` (`reports/`)
+- [ ] Рендеры для отчётов (mask overlay, цветная depth map) → артефакты сессии
+- [ ] «Дополнительные файлы проекта»: `Attachment` к карьеру/паспорту (произвольный файл
+      + описание), bucket-префикс `attachments/`, валидация magic bytes
+- [ ] Ретеншн-политика/очистка осиротевших объектов (отложено — после REPORT-X)
+
+---
+
 ## BACKLOG
 
 ### BUG-HUNT-2 — Backend security & data integrity · `backend/`
@@ -272,25 +415,6 @@ Bug hunts are periodic code-review tasks run by an executor agent (no UI needed)
 - [ ] `confidence_notes` аппенд, не перезапись (сохраняется mock-note)
 - [ ] `parameter_suggestions` нигде не читается и не записывается в `BlastPassport`
 - [ ] `asyncio.set_event_loop_policy` присутствует для Windows в Celery task
-
-### DEPTH-2 — IGEV-Stereo depth backend · `worker/`
-*Decided 2026-06-10. Replace SGBM disparity with a learned stereo network for metric accuracy.
-Depth error grows as `z²·Δd/(f·B)`: with ZED 2 (B=120mm, HD720) 1px disparity error ≈ 1.2m
-depth error at 10m — subpixel quality of disparity directly drives P10/P50/P80 accuracy.
-Do AFTER desktop E2E works with SGBM (pipe first, then quality).*
-
-- [ ] `worker/app/pipeline/igev_depth.py` — `PipelineStep`, same artifact contract as
-      `cv_depth.py` (reads `rectified_left/right.jpg` + `Q_matrix.json`; writes
-      `depth_map.npy` + `disparity.npy`); only disparity computation changes (SGBM → IGEV inference)
-- [ ] Backend selection via env `DEPTH_BACKEND=sgbm|igev` (default `sgbm`); SGBM stays as fallback/baseline
-- [ ] Weights mounted `models/igev:/models/igev:ro` (same pattern as SAM3); verify repo license (MIT expected)
-- [ ] Register as `ModelVersion`; step metadata must include model version (real-CV labeling rule)
-- [ ] Confidence: left-right consistency check → occlusion mask + `confidence_score`
-      (IGEV has no native uncertainty; rules require confidence fields)
-- [ ] Inference at rectified resolution (≤720p is enough: max disparity ~28px at 3–15m range)
-- [ ] Validation protocol: scene with known-size reference object (~200mm marker),
-      compare SGBM vs IGEV measured sizes; record results in `StepResult.metadata`
-- [ ] Fallback alternative if IGEV underperforms on quarry scenes: RAFT-Stereo (MIT)
 
 ### M5-c — Historical P80 trends · `backend/` + `desktop/`
 - [ ] `GET /api/v1/quarries/{id}/sections/{sid}/trend` — P80 over last N blasts per section
@@ -317,28 +441,19 @@ Do AFTER desktop E2E works with SGBM (pipe first, then quality).*
 
 ---
 
-## BLOCKED (requires ZED 2 hardware)
+## BLOCKED (requires field data)
 
-### M2 — Real CV Stereo — implementation done, validation blocked
-*Код шагов готов (M2-STEREO, см. DONE): `cv_calibration` / `cv_rectification` /
-`cv_depth` (SGBM) / `cv_pointcloud`, за флагом `ENABLE_REAL_STEREO`. Блокирована
-только проверка на реальной камере.*
+### M3 — Segmentation quality (remainder; requires training data)
+*Particle volumes + granulometry реализованы (M3-PART, см. DONE); остаток — качество
+сегментации и наземная валидация.*
 
-- [x] OpenCV stereo calibration step (`cv_calibration.py`)
-- [x] Stereo rectification (`cv_rectification.py`)
-- [x] StereoSGBM depth estimation (`cv_depth.py`)
-- [x] Open3D point cloud generation (`cv_pointcloud.py`)
-- [ ] Calibration import from ZED SDK `.conf` file → записать в `Calibration` по серийнику
-- [ ] E2E validation on real ZED 2 captures (через DESKTOP-1 capture)
-
-### M3 — Segmentation + Particle Volumes (≈12 weeks, requires training data)
 - [x] SAM3 segmentation step — text-prompted instance segmentation (`Sam3SegmentationStep`)
+- [x] Particle mask → 3D volume projection *(M3-PART)*
+- [x] Granulometry from real particle measurements *(M3-PART)*
 - [ ] YOLO-seg fine-tuning adapter (alternative to SAM3 for embedded/edge deployment)
 - [ ] Training data collection and labeling pipeline
-- [ ] Particle mask → 3D volume projection
-- [ ] Granulometry from real particle measurements
-- [ ] Report PDF generation (WeasyPrint) — export endpoint уже есть; кнопка скачивания → desktop
 - [ ] Ground truth validation (sieve analysis comparison)
+- [ ] Report PDF generation — поглощено REPORT-X ниже
 
 ---
 

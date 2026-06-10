@@ -1,13 +1,34 @@
 # ZMetrics - STATUS
 
-**Last updated:** 2026-06-10 (rev 11 — IGEV/ZED закоммичено; M3-PART: реальные particle_volumes + granulometry)
-**Git HEAD:** см. `git log` (rev 10 закоммичен тремя коммитами + M3-PART этой сессией)
+**Last updated:** 2026-06-11 (rev 12 — capture UX, фикс-пачка (realm/roles/превью/заглушка), продуктовый бэклог в roadmap)
+**Git HEAD:** `0d9388f`
 
 ---
 
 ## TL;DR для следующей сессии
 
-1. **M3-PART сделан (эта сессия): последний mock-участок реального контура закрыт.**
+0. **Продуктовый бэклог 2026-06-11 внесён в roadmap** (секция «PRODUCT BACKLOG»):
+   CAP-MULTI (несколько фото к взрыву), AUTH-2 (токены на смену), REPORT-X
+   (PDF/DOCX/XLSX/CSV), EDIT-1 (редактирование сущностей), CAM-CUSTOM (свои
+   стереокамеры), M5-d (ML-модель рекомендаций + синтетические данные), UI-2
+   (современный интерфейс), STORE-1 (остатки MinIO: файлы отчётов, attachments).
+   Предложенный порядок — в roadmap; реализация ещё не начата.
+1. **Сессия 2026-06-11, часть 2 — съёмка и фиксы** (`2925d7d`…`0d9388f`):
+   - Экран съёмки: авто-превью + авто-выбор ZED, кнопка «Зарегистрировать ZED»
+     (заводская калибровка по серийнику из UI), чек-лист готовности.
+   - Починен «Client not found» при логине: в работающем Keycloak не было клиента
+     `zmetrics-desktop` (realm старше realm-export.json) — добавлен kcadm'ом.
+     Туда же: сервис-аккаунту `zmetrics-backend` выданы `manage-users`/`view-users`
+     (это был корень «опять 500 при создании пользователей»). Файл realm-export
+     уже содержит и то и другое; при переимпорте realm всё будет из коробки.
+   - Смена роли поверх существующей = upsert (revoke+grant с аудитом), не 500.
+   - Stale карта доступов в десктопе (после неудачного `/me/access` или создания
+     карьера админ «без прав») — ретраи + refresh по событиям.
+   - Превью камеры падало на каждом кадре (non-contiguous buffer) — починено.
+   - Калибровка-заглушка валила rectification криптичной ошибкой Rodrigues [1x9]:
+     worker терпим к плоским матрицам, заглушка (fx<50px) отклоняется с понятным
+     сообщением, UI предупреждает при стерео-кадре с TEST-устройством.
+2. **M3-PART сделан: последний mock-участок реального контура закрыт.**
    `cv_particles.py` (`CVParticleVolumeStep`): SAM3-полигоны (координаты исходного
    кадра) → ректифицированное пространство через `cv2.undistortPoints(R=R1, P=P1)`
    (тот же `stereoRectify(alpha=0)`, что в rectification) → растеризация → медианная
@@ -24,54 +45,53 @@
    + «⚠». Wiring: реальные шаги при `ENABLE_REAL_STEREO && ENABLE_SAM3`.
    Заголовок отчёта теперь честный: «real CV (SAM3 + stereo depth)» vs «⚠ Mock».
    Тесты: `worker/tests/test_cv_granulometry.py` (7 шт.).
-   **Не проверено на железе** — нужен прогон `scripts/e2e_capture_smoke.py`
-   с пересборкой образа воркера (`docker compose build worker`).
-2. **E2E на реальном железе пройден (2026-06-10, до M3-PART):** ZED 2 (SN 21907252,
+   **Не проверено на железе** — worker уже пересобран и запущен с флагами;
+   остался сам прогон (камера + желательно реальные камни).
+3. **E2E на реальном железе пройден (2026-06-10, до M3-PART):** ZED 2 (SN 21907252,
    2.2K SBS) → заводская калибровка → rectification → IGEV++ depth на RTX 5080 →
    2.74M точек → SAM3 (0 камней на столе — честно) → mock-грансостав. Прогон:
    `desktop\.venv\Scripts\python.exe scripts\e2e_capture_smoke.py --password changeme`.
    `DEPTH_BACKEND=igev` (+`ENABLE_REAL_STEREO=true`) включает IGEV++ вместо SGBM;
    веса `infra/models/igev/` (gitignore по `*.pth`), дефолт sceneflow.pth;
    инференс даунскейлится до `IGEV_MAX_INFERENCE_WIDTH=1536`.
-3. **Калибровка ZED:** заводской conf качается по серийнику (`calib.stereolabs.com/?SN=…`),
+4. **Калибровка ZED:** заводской conf качается по серийнику (`calib.stereolabs.com/?SN=…`),
    конвертация в `CalibrationCreate` — `zmetrics_desktop/capture/zed_calibration.py`
    (Rodrigues([RX,CV,RZ]), **T=[−Baseline,TY,TZ] мм** — конвенция zed-opencv-native).
-   Глубина в **мм** (как T); метадата-ключ `median_depth_mm` (был мислейбл `_m`).
-4. **Флаги НЕ в `infra/.env`** (файл закрыт для агента): в этой сессии передавались через
-   process env. Добавить руками: `ENABLE_REAL_STEREO=true`, `ENABLE_SAM3=true`,
+   Глубина в **мм** (как T); регистрация теперь из UI («Зарегистрировать ZED»).
+5. **Флаги НЕ в `infra/.env`** (файл закрыт для агента): передаются через process env
+   при `compose up`. Добавить руками: `ENABLE_REAL_STEREO=true`, `ENABLE_SAM3=true`,
    `DEPTH_BACKEND=igev`. Иначе следующий `compose up` вернёт mock/SGBM.
-5. **Docker Desktop чинился дважды:** крах на старте «file cannot be accessed by the
+6. **Docker Desktop чинился дважды:** крах на старте «file cannot be accessed by the
    system» = битые unix-сокеты; лечится `wsl -d docker-desktop -e rm -rf
    /mnt/host/c/Users/Nikita/AppData/Local/Docker/run` (+ `docker-secrets-engine`).
    Docker AI отключён. Данные WSL на **G:** (`wslDataFolder`), C: не забивается.
-6. **Следующее:** реальные particle_volumes/granulometry из SAM3-масок × depth
-   (последний mock-участок реального контура); съёмка реального развала; юзертесты
-   UT-D1/UT-D2; PyInstaller (UT-D6).
+7. **Следующее:** старт продуктового бэклога (см. п.0 — предлагаю CAP-MULTI + AUTH-2);
+   съёмка реального развала с реальной калибровкой ZED; юзертесты UT-D1/UT-D2;
+   PyInstaller (UT-D6).
 
 ---
 
-## Tests (последний прогон 2026-06-10 вечер)
+## Tests (последний прогон 2026-06-11)
 
 | Suite | Result |
 |---|---|
-| backend (`backend/tests`) | 78 passed (не перегонялись в этой сессии) |
-| worker (`worker/tests`) | 39 passed (32 + 7 новых cv_particles/cv_granulometry; хостовый `worker\.venv` — досталлен sqlalchemy) |
-| desktop (`desktop/tests`) | 121 passed (113 + 8 новых zed_calibration) |
+| backend (`backend/tests`, в контейнере) | 79 passed (78 + grant-upsert; 3 теста сделаны герметичными — ходили в реальный KC) |
+| worker (`worker/tests`, хостовый `worker\.venv`) | 42 passed (32 + 7 cv_particles/granulometry + 3 cv_rectification) |
+| desktop (`desktop/tests`) | 121 passed |
 
 ---
 
 ## Runtime notes
 
-- Docker Desktop на момент записи остановлен. Старт стека:
-  `docker compose -f infra\docker-compose.yml up -d --remove-orphans`
-  (`--remove-orphans` один раз — добьёт осиротевшие контейнеры `frontend`,
-  `grafana`/`prometheus`/`celery-exporter` от старых экспериментов).
-- GPU для SAM3 — отдельный оверлей: `... -f infra\docker-compose.gpu.yml up -d`
-  плюс `ENABLE_SAM3=true`. Базовый стек стартует без GPU (mock-сегментация).
-- **Работающий Keycloak ещё держит старых клиентов** `zmetrics-web`/`zmetrics-mobile`
-  и `directAccessGrantsEnabled=false` у `zmetrics-desktop` — realm импортируется только
-  при первом старте. Прибрать вручную в консоли (8080) или переимпортировать realm.
-  Пока ROPC-смоук через `zmetrics-mobile` продолжает работать.
+- Стек на момент записи работает (backend/worker пересобраны 2026-06-11; worker — с
+  GPU-оверлеем и флагами через process env). Холодный старт:
+  `docker compose -f infra\docker-compose.yml -f infra\docker-compose.gpu.yml up -d --remove-orphans`
+  с выставленными `ENABLE_REAL_STEREO/ENABLE_SAM3/DEPTH_BACKEND` в окружении.
+- **Работающий Keycloak realm старше realm-export.json**, добито kcadm'ом по живому:
+  клиент `zmetrics-desktop` (PKCE) создан; сервис-аккаунту `zmetrics-backend` выданы
+  `manage-users`/`view-users`. Старые клиенты `zmetrics-web`/`zmetrics-mobile` всё ещё
+  в realm (ROPC-смоук через `zmetrics-mobile` работает). Полная синхронизация = снести
+  realm и дать переимпортироваться (потеряются ручные пользователи/пароли).
 - ⚠ `infra/docker-compose.yml` всё ещё хардкодит `ENABLE_DEV_SEED: "true"` — для общих
   стендов поменять на `${ENABLE_DEV_SEED:-false}`.
 
@@ -81,10 +101,10 @@
 
 | Layer | State |
 |---|---|
-| **backend** | M1 + SEC + ADMIN-USERS-1 (включён, проверен E2E) + bootstrap/capture фиксы |
-| **worker** | SAM3 (CUDA) + M2-STEREO + IGEV++ depth + M5-a/M5-b + **M3-PART: реальные particle_volumes/granulometry (юнит-тесты ок, на железе не гонялись)**; mock-шагов в реальном контуре больше нет |
-| **desktop** | Все экраны DESKTOP-1 готовы; + `capture/zed_calibration.py` (заводская калибровка ZED); юзертесты UT-D1..D5 не пройдены; PyInstaller не делался |
-| **infra** | compose: IGEV env+volume; GPU-оверлей (SAM3+IGEV); `infra/models/igev/` веса; conf ZED SN21907252 в репо |
+| **backend** | M1 + SEC + ADMIN-USERS-1 (создание/редактирование пользователей проверено вживую 2026-06-11) + grant-upsert |
+| **worker** | SAM3 (CUDA) + M2-STEREO + IGEV++ depth + M5-a/M5-b + M3-PART (реальные particle_volumes/granulometry; юнит-тесты ок, на железе не гонялись) + отказ от калибровок-заглушек; mock-шагов в реальном контуре больше нет |
+| **desktop** | Все экраны DESKTOP-1 + capture UX (авто-превью, «Зарегистрировать ZED», чек-лист) + access-map refresh; юзертесты UT-D1..D5 не пройдены; PyInstaller не делался |
+| **infra** | compose: IGEV env+volume; GPU-оверлей (SAM3+IGEV); веса `infra/models/igev/`; conf ZED SN21907252 в репо; живой realm допатчен kcadm'ом |
 
 ---
 
@@ -92,17 +112,19 @@
 
 | Pri | ID | Item | Notes |
 |---|---|---|---|
-| **P1** | — | E2E смоук M3-PART на железе | `docker compose build worker` + флаги + `scripts/e2e_capture_smoke.py`; на столе ждём «0 камней → нет отчёта» |
-| **P1** | — | Съёмка реального развала ZED 2 + прогон IGEV+SAM3+M3-PART | смоук на столе прошёл (до M3-PART), нужны камни |
-| **P2** | UT-D1 | Smoke десктопа: логин (OIDC/keyring), статус-бар, дашборд | чек-лист в roadmap (DESKTOP-1) |
-| **P2** | UT-D2 | CRUD + workflow паспорта + ролевой гейтинг | после UT-D1 |
-| **P2** | UT-D3 | Capture E2E через UI десктопа на ZED 2 | headless-вариант уже есть: `scripts/e2e_capture_smoke.py`; в UI кнопка «Подготовить тестовое устройство» создаёт заглушку — добавить путь «зарегистрировать ZED по серийнику» |
-| **P2** | UT-D4/UT-2 | Отчёты + рекомендации (rule engine E2E через десктоп) | |
-| **P2** | UT-D5 | Админка и роли (выдать/отозвать, AuditLog) | admin-фича уже включена и работает |
-| **P3** | — | SAM3-метаданные в панели завершённого job + smoke на `rock-sample.png` без камеры | картинка теперь в `desktop/zmetrics_desktop/assets/` |
+| **P1** | CAP-MULTI | Несколько фото к одному взрыву (серия + загрузка с диска) | спека в roadmap → PRODUCT BACKLOG |
+| **P1** | AUTH-2 | Токены на рабочую смену + проактивный refresh + диалог релогина | realm-настройки + desktop |
+| **P1** | — | Съёмка через UI с реальной калибровкой ZED («Зарегистрировать ZED» → снять) | проверит M3-PART на железе; на столе ждём «0 камней → нет отчёта» |
+| **P2** | REPORT-X | Отчёты PDF/DOCX/XLSX/CSV с сегментацией/паспортом/рекомендациями | тянет за собой STORE-1 |
+| **P2** | EDIT-1 | Редактирование сущностей (с safety-оговорками) | паспорт после DRAFT — только ревизией |
+| **P2** | CAM-CUSTOM | Нестандартные стереокамеры + редактирование калибровки | ручной ввод + импорт .conf/.yml |
+| **P2** | UT-D1..D5 | Юзертесты десктопа (логин, CRUD, capture, отчёты, админка) | чек-листы в roadmap (DESKTOP-1) |
+| **P3** | M5-d | ML-модель рекомендаций + синтетические обучающие данные (Kuz-Ram) | исследовательская ветка |
+| **P3** | UI-2 | Современный интерфейс (QSS-тема, иконки, тосты) | |
 | **P3** | — | PyInstaller build + UT-D6 на чистой Windows | |
-| ~~done~~ | DEPTH-2 | ~~IGEV-Stereo вместо SGBM~~ | сделано 2026-06-10, IGEV++ за `DEPTH_BACKEND=igev` |
-| ~~done~~ | M3-PART | ~~Реальные particle_volumes + granulometry~~ | сделано 2026-06-11, требуется прогон на железе |
+| ~~done~~ | DEPTH-2 | ~~IGEV++ вместо SGBM~~ | 2026-06-10 |
+| ~~done~~ | M3-PART | ~~Реальные particle_volumes + granulometry~~ | 2026-06-11, нужен прогон на железе |
+| ~~done~~ | — | ~~Capture UX + фикс-пачка (realm/roles/превью/заглушка)~~ | 2026-06-11 |
 
 ---
 
