@@ -36,14 +36,15 @@ async def _quarry_id_for_session(session_id: UUID, db: AsyncSession) -> UUID:
 @router.post("/{capture_session_id}/jobs", response_model=AnalysisJobRead, status_code=status.HTTP_201_CREATED)
 async def enqueue_analysis_job(
     capture_session_id: UUID,
-    body: AnalysisJobCreate,
+    body: AnalysisJobCreate | None = None,
     current_user: UserProfile = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> AnalysisJob:
     quarry_id = await _quarry_id_for_session(capture_session_id, db)
     await check_quarry_access(db, current_user.id, quarry_id, RoleLevel.SURVEYOR)
     from app.services.analysis import enqueue_job
-    job = await enqueue_job(db, capture_session_id, body.model_version_id)
+    model_version_id = body.model_version_id if body else None
+    job = await enqueue_job(db, capture_session_id, model_version_id)
     return job
 
 

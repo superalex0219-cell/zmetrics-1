@@ -7,7 +7,7 @@ from app.db.models.analysis import JobStatus
 
 
 class AnalysisJobCreate(BaseModel):
-    capture_session_id: UUID
+    # capture_session_id comes from the URL path, not the body.
     model_version_id: UUID | None = None
 
 
