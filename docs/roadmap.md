@@ -208,8 +208,9 @@ Bug hunts are periodic code-review tasks run by an executor agent (no UI needed)
       dev-seed данных (карточки, гистограмма, mock-бейдж)
 - [x] Screens: карьеры + участки (list/create, общий выбор карьера через AppState,
       403 сервера показывается в форме) — 70 tests green
-- [ ] Screens: паспорта (list/detail/create, переходы статусов кнопками, взрыв);
-      ролевой гейтинг кнопок по `/access` (`user<surveyor<blaster<admin`)
+- [x] Screens: паспорта (list/detail/create, переходы статусов кнопками с
+      подтверждением, взрыв); ролевой гейтинг кнопок по `/access`
+      (`user<surveyor<blaster<admin`, fail closed) — 81 tests green
 - [ ] **UT-D2 — CRUD и workflow паспорта:** создать карьер → участок → паспорт →
       Submit → Approve → Activate → взрыв; проверить, что под ролью `user` кнопки
       записи скрыты/задизейблены, а API всё равно отдаёт 403 при прямом вызове
