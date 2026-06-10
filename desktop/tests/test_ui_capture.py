@@ -82,7 +82,15 @@ def test_capture_disabled_without_role_or_frame(qapp, tmp_path):
     assert not screen._capture_button.isEnabled()  # роль есть, кадра нет
 
     screen._on_preview_frame(_frame())
-    assert screen._capture_button.isEnabled()  # роль + кадр
+    # Роль + кадр, но нет паспорта/устройства — чек-лист объясняет, чего не хватает
+    assert not screen._capture_button.isEnabled()
+    assert "паспорт" in screen._ready_label.text()
+
+    screen._on_passports([_passport("p2", "approved")])
+    screen._device_combo.addItem("dev", "d1")
+    screen._calibration_combo.addItem("cal", "cal1")
+    assert screen._capture_button.isEnabled()  # весь чек-лист закрыт
+    assert "Готово" in screen._ready_label.text()
 
 
 def test_user_role_keeps_capture_disabled(qapp, tmp_path):

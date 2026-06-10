@@ -1,9 +1,13 @@
 """Capture & analysis screen: live UVC preview, frame upload, job polling, P80.
 
-Поток: превью с камеры (фоновый воркер) → «Снять и отправить» (нужна роль surveyor) →
+Поток: превью стартует само (ZED выбирается приоритетно) → чек-лист готовности
+подсказывает, чего не хватает → «Снять и отправить» (нужна роль surveyor) →
 онлайн: capture session + кадры + analysis job, поллинг статуса каждые 2 с → P10/P50/P80;
 оффлайн: кадры сохраняются на диск, составная операция уходит в очередь SyncManager и
 доливается автоматически (статус-бар).
+
+«Зарегистрировать ZED» качает заводскую калибровку с calib.stereolabs.com по
+серийнику и создаёт Device + Calibration — без консольных скриптов.
 
 Веб-камера без ZED определяется как моно (aspect < 1.8) — грузится только left_frame,
 серверный пайплайн сам падает в mock-ветку стерео. CV остаётся на сервере.
@@ -24,15 +28,24 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QPushButton,
     QVBoxLayout,
     QWidget,
 )
 
+from zmetrics_desktop.api.client import ApiError
 from zmetrics_desktop.api.zmetrics import ZMetricsApi
 from zmetrics_desktop.capture.camera import CameraError, CameraInfo, StereoCamera, list_cameras
 from zmetrics_desktop.capture.stereo import StereoFrame, encode_jpeg
+from zmetrics_desktop.capture.zed_calibration import (
+    ZedConfError,
+    build_calibration_payload,
+    fetch_conf_text,
+    parse_zed_conf,
+    resolution_for_frame,
+)
 from zmetrics_desktop.models import AnalysisResult, BlastPassport, Calibration, Device, Quarry
 from zmetrics_desktop.offline.capture_upload import (
     KIND_CAPTURE_UPLOAD,
@@ -122,6 +135,13 @@ class CaptureScreen(QWidget):
         device_row.addWidget(self._device_combo, stretch=1)
         self._calibration_combo = QComboBox()
         device_row.addWidget(self._calibration_combo, stretch=1)
+        self._register_zed_button = QPushButton("Зарегистрировать ZED")
+        self._register_zed_button.setToolTip(
+            "Скачивает заводскую калибровку с calib.stereolabs.com по серийному\n"
+            "номеру (на наклейке камеры) и регистрирует устройство + калибровку."
+        )
+        self._register_zed_button.clicked.connect(self._register_zed)
+        device_row.addWidget(self._register_zed_button)
         self._prepare_button = QPushButton("Подготовить тестовое устройство")
         self._prepare_button.setToolTip(
             "Регистрирует выбранную камеру как Device и создаёт калибровку-заглушку.\n"
@@ -154,6 +174,11 @@ class CaptureScreen(QWidget):
         body.addWidget(self._build_result_panel(), stretch=2)
         root.addLayout(body, stretch=1)
 
+        # Чек-лист готовности: что ещё нужно сделать, чтобы кнопка съёмки ожила
+        self._ready_label = QLabel("")
+        self._ready_label.setWordWrap(True)
+        root.addWidget(self._ready_label)
+
         actions = QHBoxLayout()
         self._capture_button = QPushButton("Снять и отправить на анализ")
         self._capture_button.setEnabled(False)
@@ -172,6 +197,9 @@ class CaptureScreen(QWidget):
 
         self._state.quarry_changed.connect(self._on_state_quarry_changed)
         self._state.access_changed.connect(self._apply_role_gating)
+        self._passport_combo.currentIndexChanged.connect(lambda *_: self._apply_role_gating())
+        self._calibration_combo.currentIndexChanged.connect(lambda *_: self._apply_role_gating())
+        self._select_device_serial: str | None = None  # выбрать после _load_devices()
 
     def _build_result_panel(self) -> QWidget:
         box = QGroupBox("Анализ")
@@ -198,6 +226,9 @@ class CaptureScreen(QWidget):
         if not self._loaded_once:
             self._loaded_once = True
             self.refresh()
+        else:
+            # hideEvent освобождает камеру — при возврате на экран включаем снова
+            self._maybe_autostart_preview()
 
     def hideEvent(self, event: QHideEvent) -> None:  # noqa: N802 — Qt naming
         super().hideEvent(event)
@@ -229,6 +260,12 @@ class CaptureScreen(QWidget):
             self._camera_combo.addItem(label, camera.index)
         if not cameras:
             self._camera_combo.addItem("Камеры не найдены", -1)
+            return
+        # ZED — приоритетный выбор; превью включаем сразу, без лишнего клика
+        zed_idx = next((i for i, c in enumerate(cameras) if c.looks_like_zed), None)
+        if zed_idx is not None:
+            self._camera_combo.setCurrentIndex(zed_idx)
+        self._maybe_autostart_preview()
 
     def _load_passports(self, quarry: Quarry) -> None:
         submit(
@@ -250,6 +287,7 @@ class CaptureScreen(QWidget):
             )
         if not self._passports:
             self._passport_combo.addItem("Нет паспортов со взрывом", None)
+        self._apply_role_gating()
 
     def _load_devices(self) -> None:
         submit(self._api.list_devices, self._on_devices, self._error_label.setText)
@@ -262,10 +300,16 @@ class CaptureScreen(QWidget):
             self._device_combo.addItem(f"{device.model} ({device.serial_number})", device.id)
         self._device_combo.blockSignals(False)
         if devices:
-            self._device_combo.setCurrentIndex(0)
-            self._on_device_selected(0)
+            target = self._select_device_serial
+            self._select_device_serial = None
+            index = next(
+                (i for i, d in enumerate(devices) if d.serial_number == target), 0
+            )
+            self._device_combo.setCurrentIndex(index)
+            self._on_device_selected(index)
         else:
             self._calibration_combo.clear()
+            self._apply_role_gating()
 
     def _on_device_selected(self, index: int) -> None:
         if not (0 <= index < len(self._devices)):
@@ -289,18 +333,39 @@ class CaptureScreen(QWidget):
             )
         if not calibrations:
             self._calibration_combo.addItem("Нет калибровок", None)
+        self._apply_role_gating()
 
     def _on_state_quarry_changed(self, quarry: object) -> None:
         if self._loaded_once and quarry is not None:
             self._load_passports(quarry)  # type: ignore[arg-type]
 
-    def _apply_role_gating(self) -> None:
-        quarry_id = self._state.quarry.id if self._state.quarry else None
-        allowed = self._state.role_level(quarry_id) >= ROLE_SURVEYOR
-        self._capture_button.setEnabled(allowed and self._last_frame is not None)
-        self._capture_button.setToolTip(
-            "" if allowed else "Нужна роль surveyor на выбранном карьере"
-        )
+    def _apply_role_gating(self, *_: object) -> None:
+        quarry = self._state.quarry
+        allowed = self._state.role_level(quarry.id if quarry else None) >= ROLE_SURVEYOR
+
+        missing: list[str] = []
+        if quarry is None:
+            missing.append("выберите карьер")
+        elif not allowed:
+            missing.append("нужна роль surveyor на этом карьере")
+        if not self._passport_combo.currentData():
+            missing.append("нужен утверждённый/активный паспорт со взрывом")
+        if not self._device_combo.currentData() or not self._calibration_combo.currentData():
+            missing.append("зарегистрируйте ZED (или тестовое устройство)")
+        if self._last_frame is None:
+            missing.append("запустите превью камеры")
+
+        ready = not missing
+        self._capture_button.setEnabled(ready)
+        if ready:
+            self._ready_label.setText("✅ Готово к съёмке — кадр уйдёт на анализ")
+            self._ready_label.setStyleSheet("color: #2a7;")
+            self._capture_button.setToolTip("")
+        else:
+            text = "Для съёмки: " + " · ".join(missing)
+            self._ready_label.setText(text)
+            self._ready_label.setStyleSheet("color: #c80;")
+            self._capture_button.setToolTip(text)
 
     # --- Preview ----------------------------------------------------------------------
 
@@ -312,6 +377,14 @@ class CaptureScreen(QWidget):
         if index is None or index < 0:
             self._error_label.setText("Камера не выбрана")
             return
+        self._start_preview(index)
+
+    def _maybe_autostart_preview(self) -> None:
+        index = self._camera_combo.currentData()
+        if self.isVisible() and self._preview_worker is None and index is not None and index >= 0:
+            self._start_preview(index)
+
+    def _start_preview(self, index: int) -> None:
         worker = _PreviewWorker(index)
         worker.signals.frame.connect(self._on_preview_frame)
         worker.signals.error.connect(self._on_preview_error)
@@ -474,6 +547,68 @@ class CaptureScreen(QWidget):
         labels["p80"].setText(_fmt(result.p80_mm, " мм"))
         labels["confidence"].setText(_fmt(result.confidence_score))
         labels["notes"].setText(_fmt(result.confidence_notes))
+
+    # --- ZED registration -----------------------------------------------------------------
+
+    def _register_zed(self) -> None:
+        """Качает заводскую калибровку по серийнику и регистрирует Device + Calibration."""
+        prefill = next(
+            (d.serial_number for d in self._devices if "zed" in d.model.lower()), ""
+        )
+        serial, ok = QInputDialog.getText(
+            self,
+            "Регистрация ZED",
+            "Серийный номер камеры (на наклейке, например 21907252):",
+            text=prefill,
+        )
+        serial = serial.strip()
+        if not ok or not serial:
+            return
+
+        # Разрешение калибровки — по текущему стерео-кадру; без превью считаем 2K (2.2K SBS)
+        resolution = "2K"
+        frame = self._last_frame
+        if frame is not None and frame.side_by_side:
+            try:
+                resolution = resolution_for_frame(frame.width, frame.height)
+            except ZedConfError:
+                pass
+
+        self._error_label.clear()
+        self._register_zed_button.setEnabled(False)
+        self._register_zed_button.setText("Скачиваю калибровку…")
+
+        def register() -> str:
+            payload = build_calibration_payload(
+                parse_zed_conf(fetch_conf_text(serial)), resolution
+            )
+            try:
+                device = self._api.create_device({
+                    "serial_number": serial,
+                    "model": "ZED 2",
+                    "notes": f"Заводская калибровка calib.stereolabs.com ({resolution})",
+                })
+            except ApiError as exc:
+                if exc.status_code != 409:  # 409 — серийник уже зарегистрирован
+                    raise
+                device = next(
+                    d for d in self._api.list_devices() if d.serial_number == serial
+                )
+            self._api.add_calibration(device.id, payload)
+            return serial
+
+        def done(registered: object) -> None:
+            self._register_zed_button.setEnabled(True)
+            self._register_zed_button.setText("Зарегистрировать ZED")
+            self._select_device_serial = str(registered)
+            self._load_devices()
+
+        def failed(message: str) -> None:
+            self._register_zed_button.setEnabled(True)
+            self._register_zed_button.setText("Зарегистрировать ZED")
+            self._error_label.setText(f"Не удалось зарегистрировать ZED: {message}")
+
+        submit(register, done, failed)
 
     # --- Test device helper -------------------------------------------------------------------
 

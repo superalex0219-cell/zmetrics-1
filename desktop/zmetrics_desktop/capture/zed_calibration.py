@@ -33,6 +33,18 @@ class ZedConfError(ValueError):
     """Raised when the conf file misses a section or key we need."""
 
 
+def fetch_conf_text(serial: str, timeout_s: float = 30.0) -> str:
+    """Download the factory calibration .conf for a serial from Stereolabs."""
+    import httpx  # local import: keep the module importable without httpx
+
+    url = CALIBRATION_URL_TEMPLATE.format(serial=serial.strip())
+    resp = httpx.get(url, follow_redirects=True, timeout=timeout_s)
+    resp.raise_for_status()
+    if "[STEREO]" not in resp.text:
+        raise ZedConfError(f"Unexpected response from {url} — not a ZED conf file")
+    return resp.text
+
+
 def resolution_for_frame(width: int, height: int) -> str:
     """Map a per-eye frame size to the conf section suffix (e.g. 2208x1242 → '2K')."""
     for name, size in RESOLUTIONS.items():
