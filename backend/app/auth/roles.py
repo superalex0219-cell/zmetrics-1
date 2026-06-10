@@ -89,13 +89,14 @@ def _build_require_any_admin():
         db: AsyncSession = Depends(get_db),
     ) -> UserProfile:
         result = await db.execute(
-            select(QuarryUserAccess)
+            select(QuarryUserAccess.id)
             .join(Role, Role.id == QuarryUserAccess.role_id)
             .where(
                 QuarryUserAccess.user_id == current_user.id,
                 QuarryUserAccess.revoked_at.is_(None),
                 Role.level >= RoleLevel.ADMIN,
             )
+            .limit(1)  # admin on several quarries is normal — any one row suffices
         )
         if result.scalar_one_or_none() is None:
             raise HTTPException(
