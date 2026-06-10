@@ -22,7 +22,7 @@ import time
 
 import numpy as np
 
-from app.pipeline.interfaces import PipelineContext, PipelineStep, StepResult
+from app.pipeline.interfaces import PipelineContext, PipelineStep, StepResult, pipeline_prefix
 
 # Masks smaller than this (rectified pixels) carry no reliable metric signal.
 MIN_MASK_PIXELS = 64
@@ -37,7 +37,7 @@ class CVParticleVolumeStep(PipelineStep):
         import cv2
 
         t0 = time.monotonic()
-        base = f"sessions/{ctx.capture_session_id}/pipeline/particles"
+        base = f"{pipeline_prefix(ctx)}/particles"
         output_key = f"{base}/particle_list.json"
 
         # Idempotency
@@ -53,7 +53,7 @@ class CVParticleVolumeStep(PipelineStep):
             pass
 
         try:
-            session_base = f"sessions/{ctx.capture_session_id}/pipeline"
+            session_base = f"{pipeline_prefix(ctx)}"
 
             def _get_json(key: str) -> dict:
                 resp = ctx.storage_client.get_object(Bucket=ctx.bucket_artifacts, Key=key)

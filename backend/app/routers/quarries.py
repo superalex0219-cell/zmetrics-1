@@ -11,7 +11,15 @@ from app.db.models.user import QuarryUserAccess, Role, UserProfile
 from app.db.session import get_db
 from app.dependencies import get_current_user
 from app.schemas.common import PaginatedResponse
-from app.schemas.quarry import QuarryCreate, QuarryRead, QuarryUpdate, SiteSectionCreate, SiteSectionRead
+from app.schemas.quarry import (
+    QuarryCreate,
+    QuarryRead,
+    QuarryUpdate,
+    SiteSectionCreate,
+    SiteSectionRead,
+    SiteSectionUpdate,
+)
+from app.services.audit import apply_update
 from app.schemas.report import ReportRead
 
 router = APIRouter()
@@ -123,12 +131,11 @@ async def get_quarry(
     return quarry
 
 
-@router.put("/{quarry_id}", response_model=QuarryRead)
-async def update_quarry(
+async def _update_quarry(
     quarry_id: UUID,
     body: QuarryUpdate,
-    current_user: UserProfile = Depends(require_quarry_role(RoleLevel.ADMIN)),
-    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile,
+    db: AsyncSession,
 ) -> Quarry:
     result = await db.execute(
         select(Quarry).where(Quarry.id == quarry_id, Quarry.deleted_at.is_(None))
@@ -136,9 +143,60 @@ async def update_quarry(
     quarry = result.scalar_one_or_none()
     if quarry is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quarry not found")
-    for field, value in body.model_dump(exclude_unset=True).items():
-        setattr(quarry, field, value)
+    changes = body.model_dump(exclude_unset=True)
+    if changes:
+        apply_update(
+            db, actor_id=current_user.id, entity=quarry,
+            entity_type="quarry", changes=changes,
+        )
     return quarry
+
+
+@router.put("/{quarry_id}", response_model=QuarryRead)
+async def update_quarry(
+    quarry_id: UUID,
+    body: QuarryUpdate,
+    current_user: UserProfile = Depends(require_quarry_role(RoleLevel.ADMIN)),
+    db: AsyncSession = Depends(get_db),
+) -> Quarry:
+    return await _update_quarry(quarry_id, body, current_user, db)
+
+
+@router.patch("/{quarry_id}", response_model=QuarryRead)
+async def patch_quarry(
+    quarry_id: UUID,
+    body: QuarryUpdate,
+    current_user: UserProfile = Depends(require_quarry_role(RoleLevel.ADMIN)),
+    db: AsyncSession = Depends(get_db),
+) -> Quarry:
+    return await _update_quarry(quarry_id, body, current_user, db)
+
+
+@router.patch("/{quarry_id}/sections/{section_id}", response_model=SiteSectionRead)
+async def patch_site_section(
+    quarry_id: UUID,
+    section_id: UUID,
+    body: SiteSectionUpdate,
+    current_user: UserProfile = Depends(require_quarry_role(RoleLevel.BLASTER)),
+    db: AsyncSession = Depends(get_db),
+) -> SiteSection:
+    result = await db.execute(
+        select(SiteSection).where(
+            SiteSection.id == section_id,
+            SiteSection.quarry_id == quarry_id,
+            SiteSection.deleted_at.is_(None),
+        )
+    )
+    section = result.scalar_one_or_none()
+    if section is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Section not found")
+    changes = body.model_dump(exclude_unset=True)
+    if changes:
+        apply_update(
+            db, actor_id=current_user.id, entity=section,
+            entity_type="site_section", changes=changes,
+        )
+    return section
 
 
 @router.get("/{quarry_id}/sections", response_model=PaginatedResponse[SiteSectionRead])

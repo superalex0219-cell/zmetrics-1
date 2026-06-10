@@ -23,6 +23,7 @@ from zmetrics_desktop.models import (
     BlastPassport,
     Calibration,
     CaptureSession,
+    CaptureSessionSummary,
     Device,
     Quarry,
     QuarryAccessEntry,
@@ -62,12 +63,22 @@ class ZMetricsApi:
     def create_quarry(self, body: dict) -> Quarry:
         return Quarry.model_validate(self._client.post("/quarries", json=body))
 
+    def update_quarry(self, quarry_id: str, body: dict) -> Quarry:
+        """EDIT-1: частичное редактирование; сервер пишет AuditLog."""
+        return Quarry.model_validate(self._client.patch(f"/quarries/{quarry_id}", json=body))
+
     def list_sections(self, quarry_id: str) -> list[SiteSection]:
         return _items(self._client.get(f"/quarries/{quarry_id}/sections"), SiteSection)
 
     def create_section(self, quarry_id: str, body: dict) -> SiteSection:
         return SiteSection.model_validate(
             self._client.post(f"/quarries/{quarry_id}/sections", json=body)
+        )
+
+    def update_section(self, quarry_id: str, section_id: str, body: dict) -> SiteSection:
+        """EDIT-1: частичное редактирование; сервер пишет AuditLog."""
+        return SiteSection.model_validate(
+            self._client.patch(f"/quarries/{quarry_id}/sections/{section_id}", json=body)
         )
 
     # --- Blast passports --------------------------------------------------------------
@@ -83,6 +94,12 @@ class ZMetricsApi:
     def create_passport(self, quarry_id: str, body: dict) -> BlastPassport:
         return BlastPassport.model_validate(
             self._client.post(f"/quarries/{quarry_id}/passports", json=body)
+        )
+
+    def update_passport(self, quarry_id: str, passport_id: str, body: dict) -> BlastPassport:
+        """EDIT-1: правка только DRAFT-паспорта (сервер вернёт 409 для остальных)."""
+        return BlastPassport.model_validate(
+            self._client.patch(f"/quarries/{quarry_id}/passports/{passport_id}", json=body)
         )
 
     def transition_passport(self, quarry_id: str, passport_id: str, action: str) -> BlastPassport:
@@ -106,6 +123,14 @@ class ZMetricsApi:
     def create_blast_event(self, quarry_id: str, passport_id: str, body: dict) -> BlastEvent:
         return BlastEvent.model_validate(
             self._client.post(
+                f"/quarries/{quarry_id}/passports/{passport_id}/blast-event", json=body
+            )
+        )
+
+    def update_blast_event(self, quarry_id: str, passport_id: str, body: dict) -> BlastEvent:
+        """EDIT-1: корректировка факта взрыва; сервер пишет AuditLog."""
+        return BlastEvent.model_validate(
+            self._client.patch(
                 f"/quarries/{quarry_id}/passports/{passport_id}/blast-event", json=body
             )
         )
@@ -147,6 +172,18 @@ class ZMetricsApi:
     def create_device(self, body: dict) -> Device:
         return Device.model_validate(self._client.post("/devices", json=body))
 
+    def update_device(self, device_id: str, body: dict) -> Device:
+        """EDIT-1: model/firmware/notes; серийник не меняется."""
+        return Device.model_validate(self._client.patch(f"/devices/{device_id}", json=body))
+
+    def update_calibration(self, device_id: str, calibration_id: str, body: dict) -> Calibration:
+        """EDIT-1: только is_active; матрицы фиксированы (новая калибровка = новая запись)."""
+        return Calibration.model_validate(
+            self._client.patch(
+                f"/devices/{device_id}/calibrations/{calibration_id}", json=body
+            )
+        )
+
     def list_calibrations(self, device_id: str) -> list[Calibration]:
         return _items(self._client.get(f"/devices/{device_id}/calibrations"), Calibration)
 
@@ -183,10 +220,26 @@ class ZMetricsApi:
             )
         )
 
-    def enqueue_job(self, session_id: str) -> AnalysisJob:
+    def enqueue_job(self, session_id: str, frame_index: int = 0) -> AnalysisJob:
         return AnalysisJob.model_validate(
-            self._client.post(f"/captures/{session_id}/jobs", json={})
+            self._client.post(
+                f"/captures/{session_id}/jobs", json={"frame_index": frame_index}
+            )
         )
+
+    def list_jobs(self, session_id: str) -> list[AnalysisJob]:
+        return _items(self._client.get(f"/captures/{session_id}/jobs"), AnalysisJob)
+
+    def get_capture_summary(
+        self, quarry_id: str, passport_id: str
+    ) -> list[CaptureSessionSummary]:
+        """Photo list of a blast: sessions + per-frame upload/job status."""
+        return [
+            CaptureSessionSummary.model_validate(item)
+            for item in self._client.get(
+                f"/quarries/{quarry_id}/passports/{passport_id}/blast-event/capture-summary"
+            )
+        ]
 
     def get_job(self, session_id: str, job_id: str) -> AnalysisJob:
         return AnalysisJob.model_validate(

@@ -44,7 +44,27 @@ async def enqueue_analysis_job(
     await check_quarry_access(db, current_user.id, quarry_id, RoleLevel.SURVEYOR)
     from app.services.analysis import enqueue_job
     model_version_id = body.model_version_id if body else None
-    job = await enqueue_job(db, capture_session_id, model_version_id)
+    frame_index = body.frame_index if body else 0
+
+    # The job analyzes one frame pair — that pair's left frame must exist.
+    from app.db.models.artifact import Artifact, ArtifactType
+    frame_filter = Artifact.frame_index == frame_index
+    if frame_index == 0:  # legacy uploads have NULL frame_index
+        frame_filter = frame_filter | Artifact.frame_index.is_(None)
+    left_exists = (await db.execute(
+        select(Artifact.id).where(
+            Artifact.capture_session_id == capture_session_id,
+            Artifact.artifact_type == ArtifactType.LEFT_FRAME,
+            frame_filter,
+        ).limit(1)
+    )).scalar_one_or_none()
+    if left_exists is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"No left_frame artifact with frame_index={frame_index} in this session",
+        )
+
+    job = await enqueue_job(db, capture_session_id, model_version_id, frame_index)
     return job
 
 

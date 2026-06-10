@@ -4,7 +4,7 @@ import asyncio
 import json
 import time
 
-from app.pipeline.interfaces import PipelineContext, PipelineStep, StepResult
+from app.pipeline.interfaces import PipelineContext, PipelineStep, StepResult, pipeline_prefix
 
 
 class MockSegmentationStep(PipelineStep):
@@ -36,7 +36,7 @@ class MockSegmentationStep(PipelineStep):
                 "confidence": float(rng.uniform(0.7, 0.99)),
             })
 
-        output_key = f"sessions/{ctx.capture_session_id}/pipeline/segmentation/masks.json"
+        output_key = f"{pipeline_prefix(ctx)}/segmentation/masks.json"
         ctx.storage_client.put_object(
             Bucket=ctx.bucket_artifacts,
             Key=output_key,

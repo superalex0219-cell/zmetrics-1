@@ -25,6 +25,14 @@ class DeviceRead(BaseModel):
     updated_at: datetime
 
 
+class DeviceUpdate(BaseModel):
+    """EDIT-1: serial_number намеренно не редактируется — это идентичность устройства."""
+
+    model: str | None = None
+    firmware_version: str | None = None
+    notes: str | None = None
+
+
 class CalibrationCreate(BaseModel):
     left_camera_matrix: dict
     right_camera_matrix: dict
@@ -55,6 +63,19 @@ class CalibrationRead(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+
+
+class CalibrationUpdate(BaseModel):
+    """EDIT-1: матрицы не редактируются — новая калибровка создаётся новой записью."""
+
+    is_active: bool | None = None
+
+
+class BlastEventUpdate(BaseModel):
+    blast_datetime: datetime | None = None
+    actual_explosive_kg: float | None = None
+    weather_conditions: str | None = None
+    notes: str | None = None
 
 
 class BlastEventCreate(BaseModel):
@@ -98,6 +119,33 @@ class CaptureSessionRead(BaseModel):
     notes: str | None
     created_at: datetime
     updated_at: datetime
+
+
+class FramePairSummary(BaseModel):
+    """One captured frame pair within a session and its latest analysis job."""
+
+    frame_index: int
+    has_left: bool
+    has_right: bool
+    job_id: UUID | None = None
+    job_status: str | None = None  # queued | running | completed | failed
+
+
+class CaptureSessionSummaryRead(BaseModel):
+    """Capture session with per-frame aggregates for the blast photo list."""
+
+    id: UUID
+    capture_datetime: datetime
+    captured_by_id: UUID
+    captured_by_name: str | None
+    device_id: UUID
+    calibration_id: UUID
+    frame_count: int
+    notes: str | None
+    frames: list[FramePairSummary]
+    jobs_total: int
+    jobs_completed: int
+    jobs_failed: int
 
 
 class ArtifactRead(BaseModel):

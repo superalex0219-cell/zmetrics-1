@@ -134,6 +134,7 @@ class AnalysisJob(_Dto):
     id: str
     capture_session_id: str
     model_version_id: str | None = None
+    frame_index: int = 0
     status: str  # queued | running | completed | failed
     queued_at: str
     started_at: str | None = None
@@ -151,6 +152,33 @@ class Artifact(_Dto):
     file_size_bytes: int | None = None
     content_type: str | None = None
     frame_index: int | None = None
+
+
+class FramePairSummary(_Dto):
+    """One frame pair of a capture session + its latest job status."""
+
+    frame_index: int
+    has_left: bool
+    has_right: bool
+    job_id: str | None = None
+    job_status: str | None = None  # queued | running | completed | failed
+
+
+class CaptureSessionSummary(_Dto):
+    """Blast photo list row: session with per-frame aggregates (CAP-MULTI)."""
+
+    id: str
+    capture_datetime: str
+    captured_by_id: str
+    captured_by_name: str | None = None
+    device_id: str
+    calibration_id: str
+    frame_count: int
+    notes: str | None = None
+    frames: list[FramePairSummary] = []
+    jobs_total: int = 0
+    jobs_completed: int = 0
+    jobs_failed: int = 0
 
 
 class QuarryAccessEntry(_Dto):

@@ -32,6 +32,7 @@ class AnalysisJob(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     capture_session_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     model_version_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    frame_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     celery_task_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     status: Mapped[JobStatus] = mapped_column(

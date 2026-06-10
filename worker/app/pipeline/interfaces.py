@@ -61,6 +61,23 @@ class PipelineStep(ABC):
         ...
 
 
+def ctx_frame_index(ctx: PipelineContext) -> int:
+    """Frame pair index this job analyzes (CAP-MULTI series; 0 for legacy jobs)."""
+    return int(ctx.config.get("frame_index") or 0)
+
+
+def pipeline_prefix(ctx: PipelineContext) -> str:
+    """MinIO prefix for this job's pipeline artifacts.
+
+    Frame 0 keeps the historical ``sessions/{id}/pipeline`` prefix (idempotency
+    with pre-CAP-MULTI artifacts); other frame pairs get their own subtree so
+    that per-pair jobs of one session never collide.
+    """
+    base = f"sessions/{ctx.capture_session_id}/pipeline"
+    idx = ctx_frame_index(ctx)
+    return base if idx == 0 else f"{base}/f{idx:04d}"
+
+
 class PipelineStepError(Exception):
     def __init__(self, step_name: str, result: StepResult) -> None:
         self.step_name = step_name

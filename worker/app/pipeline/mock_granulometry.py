@@ -9,7 +9,7 @@ import asyncio
 import json
 import time
 
-from app.pipeline.interfaces import PipelineContext, PipelineStep, StepResult
+from app.pipeline.interfaces import PipelineContext, PipelineStep, StepResult, pipeline_prefix
 
 
 class MockGranulometryStep(PipelineStep):
@@ -23,7 +23,7 @@ class MockGranulometryStep(PipelineStep):
         from scipy.optimize import curve_fit
 
         # Load particle list from previous step
-        particle_key = f"sessions/{ctx.capture_session_id}/pipeline/particles/particle_list.json"
+        particle_key = f"{pipeline_prefix(ctx)}/particles/particle_list.json"
         try:
             resp = ctx.storage_client.get_object(Bucket=ctx.bucket_artifacts, Key=particle_key)
             particle_data = json.loads(resp["Body"].read())
@@ -88,7 +88,7 @@ class MockGranulometryStep(PipelineStep):
         }
 
         # Write to MinIO
-        output_key = f"sessions/{ctx.capture_session_id}/pipeline/granulometry/result.json"
+        output_key = f"{pipeline_prefix(ctx)}/granulometry/result.json"
         ctx.storage_client.put_object(
             Bucket=ctx.bucket_artifacts,
             Key=output_key,

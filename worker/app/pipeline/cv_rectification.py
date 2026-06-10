@@ -5,12 +5,12 @@ import time
 
 import numpy as np
 
-from app.pipeline.interfaces import PipelineContext, PipelineStep, StepResult
+from app.pipeline.interfaces import PipelineContext, PipelineStep, StepResult, pipeline_prefix
 
 
 def _load_calibration_from_minio(ctx: PipelineContext) -> dict:
     """Read calibration_params.json written by CVCalibrationStep."""
-    key = f"sessions/{ctx.capture_session_id}/pipeline/calibration_params.json"
+    key = f"{pipeline_prefix(ctx)}/calibration_params.json"
     resp = ctx.storage_client.get_object(Bucket=ctx.bucket_artifacts, Key=key)
     return json.loads(resp["Body"].read())
 
@@ -43,17 +43,23 @@ def _dict_to_matrix(d: dict) -> np.ndarray:
 
 
 async def _load_frame_async(ctx: PipelineContext, artifact_type_str: str) -> np.ndarray | None:
-    """Async: load a frame artifact from MinIO."""
+    """Async: load the job's frame-pair artifact from MinIO."""
     import cv2
     from sqlalchemy import select
     from app.db_models import Artifact, ArtifactType
+    from app.pipeline.interfaces import ctx_frame_index
 
     artifact_type = ArtifactType(artifact_type_str)
+    idx = ctx_frame_index(ctx)
+    frame_filter = Artifact.frame_index == idx
+    if idx == 0:  # legacy uploads have NULL frame_index
+        frame_filter = frame_filter | Artifact.frame_index.is_(None)
     result = await ctx.db_session.execute(
         select(Artifact)
         .where(
             Artifact.capture_session_id == ctx.capture_session_id,
             Artifact.artifact_type == artifact_type,
+            frame_filter,
         )
         .limit(1)
     )
@@ -75,7 +81,7 @@ class CVRectificationStep(PipelineStep):
     async def execute(self, ctx: PipelineContext, previous_results: list[StepResult]) -> StepResult:
         import cv2
         t0 = time.monotonic()
-        base = f"sessions/{ctx.capture_session_id}/pipeline/rectification"
+        base = f"{pipeline_prefix(ctx)}/rectification"
         left_key = f"{base}/rectified_left.jpg"
         right_key = f"{base}/rectified_right.jpg"
 

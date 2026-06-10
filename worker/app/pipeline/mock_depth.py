@@ -5,7 +5,7 @@ import io
 import json
 import time
 
-from app.pipeline.interfaces import PipelineContext, PipelineStep, StepResult
+from app.pipeline.interfaces import PipelineContext, PipelineStep, StepResult, pipeline_prefix
 
 
 class MockDepthStep(PipelineStep):
@@ -21,7 +21,7 @@ class MockDepthStep(PipelineStep):
         rng = np.random.default_rng(seed=int(str(ctx.capture_session_id).replace("-", "")[:8], 16))
         depth_map = rng.uniform(2.0, 8.0, size=(128, 228)).astype(np.float32)
 
-        output_key = f"sessions/{ctx.capture_session_id}/pipeline/depth/depth_map.npy"
+        output_key = f"{pipeline_prefix(ctx)}/depth/depth_map.npy"
         buf = io.BytesIO()
         np.save(buf, depth_map)
         buf.seek(0)
@@ -33,7 +33,7 @@ class MockDepthStep(PipelineStep):
             ContentType="application/octet-stream",
         )
 
-        stats_key = f"sessions/{ctx.capture_session_id}/pipeline/depth/depth_stats.json"
+        stats_key = f"{pipeline_prefix(ctx)}/depth/depth_stats.json"
         ctx.storage_client.put_object(
             Bucket=ctx.bucket_artifacts,
             Key=stats_key,

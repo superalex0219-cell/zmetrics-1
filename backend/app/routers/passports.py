@@ -69,6 +69,31 @@ async def get_passport(
     return passport
 
 
+async def _update_draft_passport(
+    passport_id: UUID,
+    body: BlastPassportUpdate,
+    current_user: UserProfile,
+    db: AsyncSession,
+) -> BlastPassport:
+    """SAFETY: правка только в DRAFT; после SUBMITTED — только ревизией (revise)."""
+    from app.services.audit import apply_update
+
+    passport = await _get_passport_or_404(passport_id, db)
+    if passport.status != PassportStatus.DRAFT:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only DRAFT passports can be updated",
+        )
+    changes = body.model_dump(exclude_unset=True)
+    if changes:
+        apply_update(
+            db, actor_id=current_user.id, entity=passport,
+            entity_type="blast_passport", changes=changes,
+            passport_id=passport.id,
+        )
+    return passport
+
+
 @router.put("/{passport_id}", response_model=BlastPassportRead)
 async def update_passport(
     quarry_id: UUID,
@@ -77,15 +102,18 @@ async def update_passport(
     current_user: UserProfile = Depends(require_quarry_role(RoleLevel.BLASTER)),
     db: AsyncSession = Depends(get_db),
 ) -> BlastPassport:
-    passport = await _get_passport_or_404(passport_id, db)
-    if passport.status != PassportStatus.DRAFT:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Only DRAFT passports can be updated",
-        )
-    for field, value in body.model_dump(exclude_unset=True).items():
-        setattr(passport, field, value)
-    return passport
+    return await _update_draft_passport(passport_id, body, current_user, db)
+
+
+@router.patch("/{passport_id}", response_model=BlastPassportRead)
+async def patch_passport(
+    quarry_id: UUID,
+    passport_id: UUID,
+    body: BlastPassportUpdate,
+    current_user: UserProfile = Depends(require_quarry_role(RoleLevel.BLASTER)),
+    db: AsyncSession = Depends(get_db),
+) -> BlastPassport:
+    return await _update_draft_passport(passport_id, body, current_user, db)
 
 
 @router.post("/{passport_id}/submit", response_model=BlastPassportRead)

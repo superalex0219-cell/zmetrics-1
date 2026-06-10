@@ -4,7 +4,7 @@ import asyncio
 import json
 import time
 
-from app.pipeline.interfaces import PipelineContext, PipelineStep, StepResult
+from app.pipeline.interfaces import PipelineContext, PipelineStep, StepResult, pipeline_prefix
 
 # 1x1 white JPEG for mock output
 _MOCK_JPEG = bytes([
@@ -34,7 +34,7 @@ class MockRectificationStep(PipelineStep):
         t0 = time.monotonic()
         await asyncio.sleep(0.15)
 
-        base = f"sessions/{ctx.capture_session_id}/pipeline/rectification"
+        base = f"{pipeline_prefix(ctx)}/rectification"
         left_key = f"{base}/rectified_left.jpg"
         right_key = f"{base}/rectified_right.jpg"
 

@@ -4,7 +4,7 @@ import asyncio
 import json
 import time
 
-from app.pipeline.interfaces import PipelineContext, PipelineStep, StepResult
+from app.pipeline.interfaces import PipelineContext, PipelineStep, StepResult, pipeline_prefix
 
 
 class MockParticleVolumeStep(PipelineStep):
@@ -38,7 +38,7 @@ class MockParticleVolumeStep(PipelineStep):
             for i, (d, v) in enumerate(zip(diameters_m, volumes_m3))
         ]
 
-        output_key = f"sessions/{ctx.capture_session_id}/pipeline/particles/particle_list.json"
+        output_key = f"{pipeline_prefix(ctx)}/particles/particle_list.json"
         ctx.storage_client.put_object(
             Bucket=ctx.bucket_artifacts,
             Key=output_key,

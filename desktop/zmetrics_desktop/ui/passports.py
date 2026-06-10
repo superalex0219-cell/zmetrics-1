@@ -291,6 +291,15 @@ class PassportsScreen(QWidget):
         self._blast_button.setVisible(False)
         self._blast_button.clicked.connect(self._open_blast_dialog)
         buttons.addWidget(self._blast_button)
+        # EDIT-1: правка только черновика; после SUBMITTED — только ревизией
+        self._edit_draft_button = QPushButton("Изменить черновик…")
+        self._edit_draft_button.setVisible(False)
+        self._edit_draft_button.clicked.connect(self._open_edit_draft_dialog)
+        buttons.addWidget(self._edit_draft_button)
+        self._edit_blast_button = QPushButton("Изменить взрыв…")
+        self._edit_blast_button.setVisible(False)
+        self._edit_blast_button.clicked.connect(self._open_edit_blast_dialog)
+        buttons.addWidget(self._edit_blast_button)
         buttons.addStretch(1)
 
         self._action_error = QLabel()
@@ -444,6 +453,8 @@ class PassportsScreen(QWidget):
             for button in self._transition_buttons.values():
                 button.setVisible(False)
             self._blast_button.setVisible(False)
+            self._edit_draft_button.setVisible(False)
+            self._edit_blast_button.setVisible(False)
             return
 
         section_names = {s.id: s.name for s in self._sections}
@@ -479,6 +490,13 @@ class PassportsScreen(QWidget):
             passport.status in ("approved", "active")
             and role >= ROLE_BLASTER
             and self._blast_event is None
+        )
+        # EDIT-1: черновик правится формой; утверждённые паспорта — только ревизией
+        self._edit_draft_button.setVisible(
+            passport.status == "draft" and role >= ROLE_BLASTER
+        )
+        self._edit_blast_button.setVisible(
+            self._blast_event is not None and role >= ROLE_BLASTER
         )
 
     def _apply_role_gating(self) -> None:
@@ -545,5 +563,69 @@ class PassportsScreen(QWidget):
         submit(
             lambda: self._api.create_blast_event(quarry.id, passport.id, body),
             lambda event, p=passport: self._on_blast_event(p, event),
+            self._action_error.setText,
+        )
+
+    # --- Editing (EDIT-1) -------------------------------------------------------------
+
+    def _open_edit_draft_dialog(self) -> None:
+        """Правка DRAFT-паспорта; сервер вернёт 409 для любого другого статуса."""
+        passport = self._selected
+        quarry = self._state.quarry
+        if passport is None or quarry is None or passport.status != "draft":
+            return
+        from zmetrics_desktop.ui.edit_dialogs import EditFormDialog
+
+        dialog = EditFormDialog("Изменить черновик паспорта", [
+            ("blast_date_planned", "Дата взрыва (план, ГГГГ-ММ-ДД):",
+             (passport.blast_date_planned or "")[:10] or None, "str"),
+            ("explosive_type", "Тип ВВ:", passport.explosive_type, "str"),
+            ("total_explosive_kg", "Общий заряд, кг:", passport.total_explosive_kg, "float"),
+            ("number_of_holes", "Кол-во скважин:", passport.number_of_holes, "int"),
+            ("hole_diameter_mm", "Диаметр скважины, мм:", passport.hole_diameter_mm, "float"),
+            ("hole_depth_m", "Глубина скважины, м:", passport.hole_depth_m, "float"),
+            ("burden_m", "ЛНС (burden), м:", passport.burden_m, "float"),
+            ("spacing_m", "Расстояние в ряду (spacing), м:", passport.spacing_m, "float"),
+            ("stemming_m", "Забойка (stemming), м:", passport.stemming_m, "float"),
+            ("target_p80_mm", "Целевой P80, мм:", passport.target_p80_mm, "float"),
+            ("notes", "Примечания:", passport.notes, "str"),
+        ], self)
+        if dialog.exec() != QDialog.DialogCode.Accepted or not dialog.changes:
+            return
+        changes = dialog.changes
+        submit(
+            lambda: self._api.update_passport(quarry.id, passport.id, changes),
+            self._on_transition_done,  # перевыбрать паспорт + перезагрузить список
+            self._action_error.setText,
+        )
+
+    def _open_edit_blast_dialog(self) -> None:
+        passport = self._selected
+        quarry = self._state.quarry
+        event = self._blast_event
+        if passport is None or quarry is None or event is None:
+            return
+        from zmetrics_desktop.ui.edit_dialogs import EditFormDialog
+
+        dialog = EditFormDialog("Изменить данные взрыва", [
+            ("blast_datetime", "Дата и время (ГГГГ-ММ-ДДTЧЧ:ММ):",
+             event.blast_datetime[:16], "str"),
+            ("actual_explosive_kg", "Фактический заряд, кг:",
+             event.actual_explosive_kg, "float"),
+            ("weather_conditions", "Погодные условия:", event.weather_conditions, "str"),
+            ("notes", "Примечания:", event.notes, "str"),
+        ], self)
+        if dialog.exec() != QDialog.DialogCode.Accepted or not dialog.changes:
+            return
+        changes = dialog.changes
+        if "blast_datetime" in changes:
+            try:
+                datetime.fromisoformat(str(changes["blast_datetime"]))
+            except (TypeError, ValueError):
+                self._action_error.setText("Дата взрыва: формат ГГГГ-ММ-ДДTЧЧ:ММ")
+                return
+        submit(
+            lambda: self._api.update_blast_event(quarry.id, passport.id, changes),
+            lambda updated, p=passport: self._on_blast_event(p, updated),
             self._action_error.setText,
         )

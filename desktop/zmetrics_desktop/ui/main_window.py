@@ -30,6 +30,8 @@ if TYPE_CHECKING:
     from zmetrics_desktop.offline.sync_processor import SyncReport
 
 SYNC_INTERVAL_MS = 30_000  # drain the offline queue every 30 s
+AUTH_CHECK_INTERVAL_MS = 60_000  # проверка срока access-токена раз в минуту
+AUTH_REFRESH_MARGIN_S = 180.0  # обновляем за 3 минуты до истечения, не ждём 401
 
 # (nav label, screen title) in display order.
 SCREENS: list[tuple[str, str]] = [
@@ -105,6 +107,25 @@ class _LoginWorker(QRunnable):
             self.signals.succeeded.emit()
         finally:
             self._password = ""  # не держим пароль в памяти дольше необходимого
+
+
+class _RefreshWorker(QRunnable):
+    """Runs the blocking token refresh off the UI thread."""
+
+    class Signals(QObject):
+        finished = Signal(str)  # "ok" | "expired" | "offline"
+
+    def __init__(self, context: AppContext) -> None:
+        super().__init__()
+        self._context = context
+        self.signals = self.Signals()
+
+    def run(self) -> None:
+        try:
+            outcome = self._context.auth.refresh_outcome()
+        except Exception:  # не роняем UI из-за неожиданной ошибки — попробуем позже
+            outcome = "offline"
+        self.signals.finished.emit(outcome)
 
 
 class _SyncWorker(QRunnable):
@@ -219,14 +240,71 @@ class MainWindow(QMainWindow):
         self._logout_action = toolbar.addAction("Выйти", self._logout)
         self._refresh_auth_ui()
 
+        # AUTH-2: проактивное обновление токена по таймеру — не ждём 401 на экранах
+        self._refresh_running = False
+        self._session_expired_shown = False
+        self._auth_timer = QTimer(self)
+        self._auth_timer.setInterval(AUTH_CHECK_INTERVAL_MS)
+        self._auth_timer.timeout.connect(self._auth_tick)
+        self._auth_timer.start()
+        QTimer.singleShot(0, self._auth_tick)  # первый чек сразу после старта
+
     def _refresh_auth_ui(self) -> None:
         assert self._context is not None
         authenticated = self._context.auth.access_token() is not None
-        self._auth_status.setText(
-            "  Авторизован  " if authenticated else "  Не авторизован  "
-        )
+        if authenticated:
+            text = "  Авторизован  "
+            session_exp = self._context.auth.session_expires_at()
+            if session_exp:
+                from datetime import datetime
+
+                until = datetime.fromtimestamp(session_exp).strftime("%H:%M")
+                text = f"  Авторизован до {until}  "
+            self._auth_status.setText(text)
+        else:
+            self._auth_status.setText("  Не авторизован  ")
         self._login_action.setVisible(not authenticated)
         self._logout_action.setVisible(authenticated)
+
+    # --- Proactive token refresh (AUTH-2) -------------------------------------------
+
+    def _auth_tick(self) -> None:
+        assert self._context is not None
+        if self._refresh_running or self._context.auth.access_token() is None:
+            return
+        import time
+
+        expires_at = self._context.auth.access_expires_at()
+        # Неизвестный срок (старый keyring без expires_at) тоже обновляем — получим срок.
+        if expires_at is not None and expires_at - time.time() > AUTH_REFRESH_MARGIN_S:
+            return
+        self._refresh_running = True
+        worker = _RefreshWorker(self._context)
+        worker.signals.finished.connect(self._on_refresh_outcome)
+        self._refresh_worker = worker  # keep alive until the queued signal is delivered
+        QThreadPool.globalInstance().start(worker)
+
+    def _on_refresh_outcome(self, outcome: str) -> None:
+        self._refresh_running = False
+        if outcome == "ok":
+            self._session_expired_shown = False
+            self._refresh_auth_ui()
+            return
+        if outcome == "offline":
+            return  # сеть вернётся — обновим на следующем тике
+        # expired: смена закончилась — явный диалог вместо тихих 401 по всем экранам
+        assert self._context is not None
+        self._context.auth.logout()
+        self._refresh_auth_ui()
+        if self._session_expired_shown:
+            return
+        self._session_expired_shown = True
+        QMessageBox.information(
+            self,
+            "Сессия истекла",
+            "Рабочая сессия закончилась. Войдите снова, чтобы продолжить.",
+        )
+        self._start_login()
 
     def _start_login(self) -> None:
         assert self._context is not None
@@ -246,6 +324,7 @@ class MainWindow(QMainWindow):
 
     def _on_login_done(self) -> None:
         self._login_action.setEnabled(True)
+        self._session_expired_shown = False
         self._refresh_auth_ui()
         self._load_access()
 

@@ -34,6 +34,12 @@ class SiteSectionCreate(BaseModel):
     description: str | None = None
 
 
+class SiteSectionUpdate(BaseModel):
+    name: str | None = None
+    block_number: str | None = None
+    description: str | None = None
+
+
 class SiteSectionRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

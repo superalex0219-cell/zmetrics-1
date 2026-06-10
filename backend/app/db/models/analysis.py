@@ -57,6 +57,11 @@ class AnalysisJob(Base, TimestampMixin):
     model_version_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("model_version.id"), nullable=True, index=True
     )
+    # Which frame pair of the session this job analyzes (CAP-MULTI: a session may
+    # hold a series of pairs, frame_index 0..N; one job per pair).
+    frame_index: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
 
     celery_task_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     status: Mapped[JobStatus] = mapped_column(

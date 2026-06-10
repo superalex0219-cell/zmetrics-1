@@ -265,3 +265,79 @@ def test_login_password_stores_tokens(monkeypatch):
     monkeypatch.setattr("zmetrics_desktop.auth.oidc.password_grant", fake_grant)
     manager.login_password("admin-user", "changeme")
     assert store.access_token() == "at-2"
+
+
+# --- AUTH-2: сроки жизни токенов и проактивный refresh ---------------------------------
+
+
+def test_token_response_carries_expirations():
+    import time
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={
+            "access_token": "at", "refresh_token": "rt",
+            "expires_in": 900, "refresh_expires_in": 43200,
+        })
+
+    before = time.time()
+    tokens = refresh_tokens(
+        _endpoints(), "zmetrics-desktop", "old", http=_mock_token_client(handler)
+    )
+    assert tokens.access_expires_at is not None
+    assert tokens.refresh_expires_at is not None
+    assert before + 890 <= tokens.access_expires_at <= time.time() + 910
+    assert before + 43190 <= tokens.refresh_expires_at <= time.time() + 43210
+
+
+def test_refresh_outcome_expired_on_invalid_grant():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(400, json={"error": "invalid_grant"})
+
+    store = InMemoryTokenStore()
+    store.save(Tokens(access_token="old", refresh_token="dead"))
+    mgr = AuthManager(Settings(), token_store=store)
+    mgr._endpoints = _endpoints()
+
+    import zmetrics_desktop.auth.oidc as oidc
+
+    real = oidc.refresh_tokens
+    oidc_client = _mock_token_client(handler)
+    try:
+        oidc.refresh_tokens = lambda e, c, r, http=None: real(e, c, r, http=oidc_client)
+        assert mgr.refresh_outcome() == "expired"
+    finally:
+        oidc.refresh_tokens = real
+
+
+def test_refresh_outcome_offline_on_network_error(monkeypatch):
+    store = InMemoryTokenStore()
+    store.save(Tokens(access_token="old", refresh_token="rt"))
+    mgr = AuthManager(Settings(), token_store=store)
+
+    def down(*a, **kw):
+        raise httpx.ConnectError("no route")
+
+    monkeypatch.setattr("zmetrics_desktop.auth.oidc.refresh_tokens", down)
+    assert mgr.refresh_outcome() == "offline"
+    assert store.access_token() == "old"  # токены не тронуты — повторим позже
+
+
+def test_refresh_outcome_offline_on_5xx():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(503)
+
+    with pytest.raises(httpx.HTTPError):
+        refresh_tokens(
+            _endpoints(), "zmetrics-desktop", "rt", http=_mock_token_client(handler)
+        )
+
+
+def test_session_expires_at_reads_store():
+    store = InMemoryTokenStore()
+    store.save(Tokens(
+        access_token="a", refresh_token="r",
+        access_expires_at=100.0, refresh_expires_at=200.0,
+    ))
+    mgr = AuthManager(Settings(), token_store=store)
+    assert mgr.access_expires_at() == 100.0
+    assert mgr.session_expires_at() == 200.0

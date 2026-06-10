@@ -102,7 +102,20 @@ def _tokens_from_response(resp: httpx.Response) -> Tokens:
     access = body.get("access_token")
     if not access:
         raise AuthError("Token endpoint response missing access_token")
-    return Tokens(access_token=access, refresh_token=body.get("refresh_token"))
+    import time
+
+    now = time.time()
+
+    def _exp(field: str) -> float | None:
+        value = body.get(field)
+        return now + float(value) if value else None
+
+    return Tokens(
+        access_token=access,
+        refresh_token=body.get("refresh_token"),
+        access_expires_at=_exp("expires_in"),
+        refresh_expires_at=_exp("refresh_expires_in"),
+    )
 
 
 def exchange_code(
@@ -174,10 +187,14 @@ def refresh_tokens(
     }
     client = http or httpx.Client(timeout=30.0)
     try:
-        return _tokens_from_response(client.post(endpoints.token_url, data=data))
+        resp = client.post(endpoints.token_url, data=data)
     finally:
         if http is None:
             client.close()
+    if resp.status_code >= 500:
+        # Keycloak недоступен/падает — транзиентная ошибка, токены не считаем мёртвыми.
+        raise httpx.HTTPError(f"Auth server error HTTP {resp.status_code}")
+    return _tokens_from_response(resp)
 
 
 class _LoopbackServer:
@@ -300,11 +317,29 @@ class AuthManager:
         self._store.save(tokens)
         return tokens
 
+    def access_expires_at(self) -> float | None:
+        """Unix-эпоха истечения access-токена (None — неизвестно)."""
+        current = self._store.load()
+        return current.access_expires_at if current else None
+
+    def session_expires_at(self) -> float | None:
+        """Unix-эпоха истечения refresh-токена — фактический конец рабочей сессии."""
+        current = self._store.load()
+        return current.refresh_expires_at if current else None
+
     def refresh(self) -> bool:
         """Refresh the token pair. Returns True on success, False if re-login is needed."""
+        return self.refresh_outcome() == "ok"
+
+    def refresh_outcome(self) -> str:
+        """Проактивный refresh с различением причин: ``ok`` | ``expired`` | ``offline``.
+
+        ``expired`` — refresh-токен мёртв (смена закончилась) → нужен новый логин;
+        ``offline`` — сеть/Keycloak недоступны, токены не трогаем (повторим позже).
+        """
         current = self._store.load()
         if current is None or not current.refresh_token:
-            return False
+            return "expired"
         try:
             tokens = refresh_tokens(
                 self._endpoints,
@@ -312,9 +347,11 @@ class AuthManager:
                 current.refresh_token,
             )
         except AuthError:
-            return False
+            return "expired"
+        except httpx.HTTPError:
+            return "offline"
         self._store.save(tokens)
-        return True
+        return "ok"
 
     def logout(self) -> None:
         self._store.clear()

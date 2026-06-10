@@ -17,7 +17,7 @@ import time
 
 import numpy as np
 
-from app.pipeline.interfaces import PipelineContext, PipelineStep, StepResult
+from app.pipeline.interfaces import PipelineContext, PipelineStep, StepResult, pipeline_prefix
 from app.pipeline.mock_granulometry import _fit_rosin_rammler, _save_analysis_result
 
 OVERSIZE_THRESHOLD_MM = 500.0
@@ -33,10 +33,10 @@ class CVGranulometryStep(PipelineStep):
 
     async def execute(self, ctx: PipelineContext, previous_results: list[StepResult]) -> StepResult:
         t0 = time.monotonic()
-        output_key = f"sessions/{ctx.capture_session_id}/pipeline/granulometry/result.json"
+        output_key = f"{pipeline_prefix(ctx)}/granulometry/result.json"
 
         try:
-            particle_key = f"sessions/{ctx.capture_session_id}/pipeline/particles/particle_list.json"
+            particle_key = f"{pipeline_prefix(ctx)}/particles/particle_list.json"
             resp = ctx.storage_client.get_object(Bucket=ctx.bucket_artifacts, Key=particle_key)
             particle_data = json.loads(resp["Body"].read())
 

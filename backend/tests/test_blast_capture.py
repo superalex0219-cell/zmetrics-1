@@ -443,6 +443,121 @@ async def test_get_artifact_url(db_session: AsyncSession, blaster_user, capture_
     assert data["expires_in"] == 3600
 
 
+# ── CAP-MULTI: frame series + per-pair jobs + capture summary ─────────────────
+
+
+def _add_frame(db_session, session_id, artifact_type, frame_index):
+    from app.db.models.artifact import Artifact
+
+    db_session.add(Artifact(
+        capture_session_id=session_id,
+        artifact_type=artifact_type,
+        storage_bucket="zmetrics-frames",
+        storage_key=f"sessions/{session_id}/{artifact_type.value}/{frame_index}.jpg",
+        file_size_bytes=10,
+        content_type="image/jpeg",
+        frame_index=frame_index,
+    ))
+
+
+@pytest.mark.asyncio
+async def test_enqueue_job_per_frame_pair(
+    db_session: AsyncSession, surveyor_user, capture_session
+):
+    """Серия пар в одной сессии: job создаётся на конкретную пару (frame_index)."""
+    from app.db.models.artifact import ArtifactType
+
+    for idx in (0, 1):
+        _add_frame(db_session, capture_session.id, ArtifactType.LEFT_FRAME, idx)
+        _add_frame(db_session, capture_session.id, ArtifactType.RIGHT_FRAME, idx)
+    await db_session.flush()
+
+    with patch("app.services.analysis.celery_app") as celery_mock:
+        celery_mock.send_task.return_value = MagicMock(id="task-1")
+        async with _client(db_session, _jwt(surveyor_user["sub"])) as ac:
+            r0 = await ac.post(
+                f"/api/v1/captures/{capture_session.id}/jobs",
+                json={"frame_index": 0},
+                headers={"Authorization": "Bearer fake"},
+            )
+            r1 = await ac.post(
+                f"/api/v1/captures/{capture_session.id}/jobs",
+                json={"frame_index": 1},
+                headers={"Authorization": "Bearer fake"},
+            )
+
+    assert r0.status_code == 201 and r1.status_code == 201
+    assert r0.json()["frame_index"] == 0
+    assert r1.json()["frame_index"] == 1
+    assert r0.json()["id"] != r1.json()["id"]
+
+
+@pytest.mark.asyncio
+async def test_enqueue_job_missing_frame_pair_rejected(
+    db_session: AsyncSession, surveyor_user, capture_session
+):
+    """Job на пару, которой нет в сессии → 409, а не тихий пустой анализ."""
+    from app.db.models.artifact import ArtifactType
+
+    _add_frame(db_session, capture_session.id, ArtifactType.LEFT_FRAME, 0)
+    await db_session.flush()
+
+    with patch("app.services.analysis.celery_app") as celery_mock:
+        celery_mock.send_task.return_value = MagicMock(id="task-1")
+        async with _client(db_session, _jwt(surveyor_user["sub"])) as ac:
+            resp = await ac.post(
+                f"/api/v1/captures/{capture_session.id}/jobs",
+                json={"frame_index": 5},
+                headers={"Authorization": "Bearer fake"},
+            )
+    assert resp.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_capture_summary_aggregates(
+    db_session: AsyncSession, blaster_user, blast_event, capture_session
+):
+    """Сводка по взрыву: пары кадров, статусы джобов, имя снявшего."""
+    from app.db.models.analysis import AnalysisJob, JobStatus
+    from app.db.models.artifact import ArtifactType
+
+    _add_frame(db_session, capture_session.id, ArtifactType.LEFT_FRAME, 0)
+    _add_frame(db_session, capture_session.id, ArtifactType.RIGHT_FRAME, 0)
+    _add_frame(db_session, capture_session.id, ArtifactType.LEFT_FRAME, 1)
+    db_session.add(AnalysisJob(
+        capture_session_id=capture_session.id,
+        status=JobStatus.COMPLETED,
+        frame_index=0,
+    ))
+    db_session.add(AnalysisJob(
+        capture_session_id=capture_session.id,
+        status=JobStatus.FAILED,
+        frame_index=1,
+    ))
+    await db_session.flush()
+
+    q_id = blaster_user["quarry"].id
+    p_id = blaster_user["passport"].id
+    async with _client(db_session, _jwt(blaster_user["sub"])) as ac:
+        resp = await ac.get(
+            f"/api/v1/quarries/{q_id}/passports/{p_id}/blast-event/capture-summary",
+            headers={"Authorization": "Bearer fake"},
+        )
+
+    assert resp.status_code == 200
+    rows = resp.json()
+    row = next(r for r in rows if r["id"] == str(capture_session.id))
+    assert row["captured_by_name"] == "Blaster User"
+    assert row["jobs_total"] == 2
+    assert row["jobs_completed"] == 1
+    assert row["jobs_failed"] == 1
+    frames = {f["frame_index"]: f for f in row["frames"]}
+    assert frames[0]["has_left"] and frames[0]["has_right"]
+    assert frames[0]["job_status"] == "completed"
+    assert frames[1]["has_left"] and not frames[1]["has_right"]
+    assert frames[1]["job_status"] == "failed"
+
+
 # ── Security tests ────────────────────────────────────────────────────────────
 
 

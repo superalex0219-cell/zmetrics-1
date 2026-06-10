@@ -152,5 +152,77 @@ def test_offline_capture_goes_to_queue(qapp, tmp_path):
     items = queue.pending()
     assert len(items) == 1
     assert items[0].kind == "capture_upload"
-    assert os.path.exists(items[0].payload["left_path"])  # кадр ждёт отправки на диске
+    frames = items[0].payload["frames"]
+    assert len(frames) == 1
+    assert os.path.exists(frames[0]["left_path"])  # кадр ждёт отправки на диске
     queue.close()
+
+
+def test_series_collects_frames_and_clears(qapp, tmp_path):
+    """Кадры добавляются в серию, кнопка показывает счётчик, удаление работает."""
+    pytest.importorskip("cv2")
+    state = AppState()
+    state.set_quarry(_Q1)
+    state.set_access([QuarryAccessEntry(
+        quarry_id="q1", quarry_name="Карьер 1", role_name="surveyor", role_level=2,
+    )])
+    screen = CaptureScreen(_context(tmp_path), state)
+    screen._on_passports([_passport("p2", "approved")])
+    screen._device_combo.addItem("dev", "d1")
+    screen._calibration_combo.addItem("cal", "cal1")
+
+    screen._on_preview_frame(_frame())
+    screen._add_current_to_series()
+    screen._add_current_to_series()
+    assert len(screen._series) == 2
+    assert screen._series_list.count() == 2
+    assert "(2)" in screen._capture_button.text()
+
+    screen._series_list.setCurrentRow(0)
+    screen._remove_selected_shot()
+    assert len(screen._series) == 1
+    assert screen._series_list.item(0).text().startswith("0:")
+
+    screen._clear_series()
+    assert not screen._series
+    assert "Снять и отправить" in screen._capture_button.text()
+
+
+def test_offline_series_queued_as_single_operation(qapp, tmp_path):
+    """Серия уходит в SyncManager одной составной операцией со списком кадров."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/health":
+            raise httpx.ConnectError("down")
+        return httpx.Response(200, json={"items": [], "total": 0, "page": 1, "page_size": 50})
+
+    settings = Settings(offline_db_path=tmp_path / "offline.db")
+    from zmetrics_desktop.offline.sync_manager import SyncManager
+
+    context = SimpleNamespace(
+        api=ApiClient(settings, transport=httpx.MockTransport(handler)),
+        settings=settings,
+        make_sync_manager=lambda: SyncManager(settings.offline_db_path),
+    )
+    state = AppState()
+    state.set_quarry(_Q1)
+    state.set_access([QuarryAccessEntry(
+        quarry_id="q1", quarry_name="Карьер 1", role_name="surveyor", role_level=2,
+    )])
+    screen = CaptureScreen(context, state)
+    screen._on_passports([_passport("p2", "approved")])
+    screen._device_combo.addItem("dev", "d1")
+    screen._calibration_combo.addItem("cal", "cal1")
+    screen._on_preview_frame(_frame())
+
+    pytest.importorskip("cv2")
+    screen._add_current_to_series()
+    screen._add_current_to_series()
+    screen._capture_and_send()
+
+    queue = SyncManager(settings.offline_db_path)
+    items = queue.pending()
+    assert len(items) == 1  # одна составная операция, не две
+    assert len(items[0].payload["frames"]) == 2
+    queue.close()
+    assert not screen._series  # серия очищена после постановки в очередь

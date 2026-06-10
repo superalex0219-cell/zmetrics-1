@@ -12,11 +12,13 @@ async def enqueue_job(
     db: AsyncSession,
     capture_session_id: uuid.UUID,
     model_version_id: uuid.UUID | None = None,
+    frame_index: int = 0,
 ) -> AnalysisJob:
     """Create an AnalysisJob record and dispatch the Celery pipeline task."""
     job = AnalysisJob(
         capture_session_id=capture_session_id,
         model_version_id=model_version_id,
+        frame_index=frame_index,
         status=JobStatus.QUEUED,
     )
     db.add(job)

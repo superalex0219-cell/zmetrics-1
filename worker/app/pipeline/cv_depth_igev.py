@@ -15,7 +15,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from app.pipeline.interfaces import PipelineContext, PipelineStep, StepResult
+from app.pipeline.interfaces import PipelineContext, PipelineStep, StepResult, pipeline_prefix
 
 # Architecture hyperparameters of the published igev_plusplus checkpoints
 # (defaults of demo_imgs.py in the upstream repo) — must match the weights.
@@ -84,7 +84,7 @@ class IGEVDepthStep(PipelineStep):
         import torch
 
         t0 = time.monotonic()
-        base = f"sessions/{ctx.capture_session_id}/pipeline/depth_estimation"
+        base = f"{pipeline_prefix(ctx)}/depth_estimation"
         depth_key = f"{base}/depth_map.npy"
         disp_key = f"{base}/disparity.npy"
 
@@ -104,7 +104,7 @@ class IGEVDepthStep(PipelineStep):
             if not Path(self._ckpt_path).is_file():
                 raise FileNotFoundError(f"IGEV checkpoint not found: {self._ckpt_path}")
 
-            rect_base = f"sessions/{ctx.capture_session_id}/pipeline/rectification"
+            rect_base = f"{pipeline_prefix(ctx)}/rectification"
 
             def _read_image(key: str) -> np.ndarray:
                 resp = ctx.storage_client.get_object(Bucket=ctx.bucket_artifacts, Key=key)

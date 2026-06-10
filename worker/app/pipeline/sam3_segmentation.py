@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from app.pipeline.interfaces import PipelineContext, PipelineStep, StepResult
+from app.pipeline.interfaces import PipelineContext, PipelineStep, StepResult, pipeline_prefix
 
 if TYPE_CHECKING:
     from PIL import Image as PILImage
@@ -86,17 +86,23 @@ def _ensure_model_loaded(model_path: str) -> tuple[Any, Any, str]:
 # ---------------------------------------------------------------------------
 
 async def _fetch_left_frame(ctx: PipelineContext) -> "PILImage.Image | None":
-    """Download the first left_frame artifact for this capture session."""
+    """Download the job's left_frame artifact (its frame pair) for this session."""
     from PIL import Image
     from sqlalchemy import select
 
     from app.db_models import Artifact, ArtifactType
+    from app.pipeline.interfaces import ctx_frame_index
 
+    idx = ctx_frame_index(ctx)
+    frame_filter = Artifact.frame_index == idx
+    if idx == 0:  # legacy uploads have NULL frame_index
+        frame_filter = frame_filter | Artifact.frame_index.is_(None)
     stmt = (
         select(Artifact)
         .where(
             Artifact.capture_session_id == ctx.capture_session_id,
             Artifact.artifact_type == ArtifactType.LEFT_FRAME,
+            frame_filter,
         )
         .order_by(Artifact.frame_index)
         .limit(1)
@@ -267,7 +273,7 @@ class Sam3SegmentationStep(PipelineStep):
         self, ctx: PipelineContext, previous_results: list[StepResult]
     ) -> StepResult:
         t0 = time.monotonic()
-        output_key = f"sessions/{ctx.capture_session_id}/pipeline/segmentation/masks.json"
+        output_key = f"{pipeline_prefix(ctx)}/segmentation/masks.json"
 
         # Idempotency: skip if artifact already written
         try:

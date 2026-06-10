@@ -24,8 +24,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from PySide6.QtWidgets import QDialog
+
 from zmetrics_desktop.api.zmetrics import ZMetricsApi
 from zmetrics_desktop.models import Quarry, SiteSection
+from zmetrics_desktop.ui.state import ROLE_BLASTER
 from zmetrics_desktop.ui.workers import submit
 
 if TYPE_CHECKING:
@@ -53,6 +56,10 @@ class SectionsScreen(QWidget):
         refresh = QPushButton("Обновить")
         refresh.clicked.connect(self.refresh)
         header.addWidget(refresh)
+        self._edit_button = QPushButton("Изменить выбранный…")
+        self._edit_button.setVisible(False)  # fail closed: нужна роль blaster
+        self._edit_button.clicked.connect(self._open_edit_dialog)
+        header.addWidget(self._edit_button)
         header.addStretch(1)
         self._error_label = QLabel()
         self._error_label.setStyleSheet("color: #b00;")
@@ -64,11 +71,14 @@ class SectionsScreen(QWidget):
         self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
+        self._table.itemSelectionChanged.connect(self._update_edit_button)
         root.addWidget(self._table, stretch=1)
 
         root.addWidget(self._build_create_form())
 
         self._state.quarry_changed.connect(self._on_state_quarry_changed)
+        self._state.access_changed.connect(self._update_edit_button)
 
     def _build_create_form(self) -> QGroupBox:
         box = QGroupBox("Новый участок / блок")
@@ -159,6 +169,45 @@ class SectionsScreen(QWidget):
             cells = [section.name, section.block_number or "", section.description or ""]
             for col, text in enumerate(cells):
                 self._table.setItem(row, col, QTableWidgetItem(text))
+
+    # --- Editing (EDIT-1) -----------------------------------------------------------
+
+    def _selected_section(self) -> SiteSection | None:
+        rows = {item.row() for item in self._table.selectedItems()}
+        if len(rows) == 1:
+            row = rows.pop()
+            if 0 <= row < len(self._sections):
+                return self._sections[row]
+        return None
+
+    def _update_edit_button(self, *_: object) -> None:
+        quarry = self._state.quarry
+        self._edit_button.setVisible(
+            self._selected_section() is not None
+            and quarry is not None
+            and self._state.role_level(quarry.id) >= ROLE_BLASTER
+        )
+
+    def _open_edit_dialog(self) -> None:
+        section = self._selected_section()
+        quarry = self._state.quarry
+        if section is None or quarry is None:
+            return
+        from zmetrics_desktop.ui.edit_dialogs import EditFormDialog
+
+        dialog = EditFormDialog("Изменить участок", [
+            ("name", "Название:", section.name, "str"),
+            ("block_number", "№ блока:", section.block_number, "str"),
+            ("description", "Описание:", section.description, "str"),
+        ], self)
+        if dialog.exec() != QDialog.DialogCode.Accepted or not dialog.changes:
+            return
+        changes = dialog.changes
+        submit(
+            lambda: self._api.update_section(quarry.id, section.id, changes),
+            lambda _s: self._load_sections(quarry),
+            self._error_label.setText,
+        )
 
     # --- Creation -----------------------------------------------------------------
 

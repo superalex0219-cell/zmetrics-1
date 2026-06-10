@@ -5,7 +5,7 @@ import io
 import json
 import time
 
-from app.pipeline.interfaces import PipelineContext, PipelineStep, StepResult
+from app.pipeline.interfaces import PipelineContext, PipelineStep, StepResult, pipeline_prefix
 
 
 class MockPointCloudStep(PipelineStep):
@@ -34,7 +34,7 @@ class MockPointCloudStep(PipelineStep):
         )
         ply_data = ply_header + "\n".join(f"{x:.4f} {y:.4f} {z:.4f}" for x, y, z in points)
 
-        output_key = f"sessions/{ctx.capture_session_id}/pipeline/pointcloud/point_cloud.ply"
+        output_key = f"{pipeline_prefix(ctx)}/pointcloud/point_cloud.ply"
         ctx.storage_client.put_object(
             Bucket=ctx.bucket_artifacts,
             Key=output_key,
@@ -42,7 +42,7 @@ class MockPointCloudStep(PipelineStep):
             ContentType="application/octet-stream",
         )
 
-        meta_key = f"sessions/{ctx.capture_session_id}/pipeline/pointcloud/meta.json"
+        meta_key = f"{pipeline_prefix(ctx)}/pointcloud/meta.json"
         ctx.storage_client.put_object(
             Bucket=ctx.bucket_artifacts,
             Key=meta_key,

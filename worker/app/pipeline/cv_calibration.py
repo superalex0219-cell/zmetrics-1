@@ -4,7 +4,7 @@ import time
 
 import numpy as np
 
-from app.pipeline.interfaces import PipelineContext, PipelineStep, StepResult
+from app.pipeline.interfaces import PipelineContext, PipelineStep, StepResult, pipeline_prefix
 
 
 class CVCalibrationStep(PipelineStep):
@@ -12,7 +12,7 @@ class CVCalibrationStep(PipelineStep):
 
     async def execute(self, ctx: PipelineContext, previous_results: list[StepResult]) -> StepResult:
         t0 = time.monotonic()
-        output_key = f"sessions/{ctx.capture_session_id}/pipeline/calibration_params.json"
+        output_key = f"{pipeline_prefix(ctx)}/calibration_params.json"
 
         # Idempotency: skip if already written
         try:

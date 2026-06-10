@@ -68,17 +68,21 @@ async def _run_pipeline_async(job_id: UUID) -> dict:
             aws_secret_access_key=settings.minio_secret_key,
         )
 
+        frame_index = getattr(job, "frame_index", 0) or 0
         ctx = PipelineContext(
             job_id=job_id,
             capture_session_id=job.capture_session_id,
             storage_client=s3_client,
             db_session=db,
+            config={"frame_index": frame_index},
             bucket_frames=settings.minio_bucket_frames,
             bucket_artifacts=settings.minio_bucket_artifacts,
         )
 
         # Determine whether to use real stereo CV steps
-        use_real_stereo = settings.enable_real_stereo and await _has_right_frame(db, job.capture_session_id)
+        use_real_stereo = settings.enable_real_stereo and await _has_right_frame(
+            db, job.capture_session_id, frame_index
+        )
 
         if use_real_stereo:
             from app.pipeline.cv_calibration import CVCalibrationStep
@@ -200,14 +204,18 @@ async def _load_job(db, job_id: UUID):
         return None
 
 
-async def _has_right_frame(db, capture_session_id: UUID) -> bool:
-    """Check if capture session has a right_frame artifact."""
+async def _has_right_frame(db, capture_session_id: UUID, frame_index: int = 0) -> bool:
+    """Check if the job's frame pair has a right_frame artifact."""
     from sqlalchemy import select
     from app.db_models import Artifact, ArtifactType
+    frame_filter = Artifact.frame_index == frame_index
+    if frame_index == 0:  # legacy uploads have NULL frame_index
+        frame_filter = frame_filter | Artifact.frame_index.is_(None)
     result = await db.execute(
         select(Artifact).where(
             Artifact.capture_session_id == capture_session_id,
             Artifact.artifact_type == ArtifactType.RIGHT_FRAME,
+            frame_filter,
         ).limit(1)
     )
     return result.scalar_one_or_none() is not None

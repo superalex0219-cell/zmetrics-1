@@ -25,8 +25,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from PySide6.QtWidgets import QDialog
+
 from zmetrics_desktop.api.zmetrics import ZMetricsApi
 from zmetrics_desktop.models import Quarry
+from zmetrics_desktop.ui.state import ROLE_ADMIN
 from zmetrics_desktop.ui.workers import submit
 
 if TYPE_CHECKING:
@@ -62,11 +65,17 @@ class QuarriesScreen(QWidget):
         refresh = QPushButton("Обновить")
         refresh.clicked.connect(self.refresh)
         header.addWidget(refresh)
+        self._edit_button = QPushButton("Изменить выбранный…")
+        self._edit_button.setVisible(False)  # fail closed: нужна роль admin на карьере
+        self._edit_button.clicked.connect(self._open_edit_dialog)
+        header.addWidget(self._edit_button)
         header.addStretch(1)
         self._error_label = QLabel()
         self._error_label.setStyleSheet("color: #b00;")
         header.addWidget(self._error_label)
         root.addLayout(header)
+
+        state.access_changed.connect(self._update_edit_button)
 
         self._table = QTableWidget(0, 4)
         self._table.setHorizontalHeaderLabels(["Название", "Расположение", "Широта", "Долгота"])
@@ -143,6 +152,44 @@ class QuarriesScreen(QWidget):
             row = rows.pop()
             if 0 <= row < len(self._quarries):
                 self._state.set_quarry(self._quarries[row])
+        self._update_edit_button()
+
+    # --- Editing (EDIT-1) -----------------------------------------------------------
+
+    def _selected_quarry(self) -> Quarry | None:
+        rows = {item.row() for item in self._table.selectedItems()}
+        if len(rows) == 1:
+            row = rows.pop()
+            if 0 <= row < len(self._quarries):
+                return self._quarries[row]
+        return None
+
+    def _update_edit_button(self, *_: object) -> None:
+        quarry = self._selected_quarry()
+        self._edit_button.setVisible(
+            quarry is not None and self._state.role_level(quarry.id) >= ROLE_ADMIN
+        )
+
+    def _open_edit_dialog(self) -> None:
+        quarry = self._selected_quarry()
+        if quarry is None:
+            return
+        from zmetrics_desktop.ui.edit_dialogs import EditFormDialog
+
+        dialog = EditFormDialog("Изменить карьер", [
+            ("name", "Название:", quarry.name, "str"),
+            ("location_description", "Расположение:", quarry.location_description, "str"),
+            ("latitude", "Широта:", quarry.latitude, "float"),
+            ("longitude", "Долгота:", quarry.longitude, "float"),
+        ], self)
+        if dialog.exec() != QDialog.DialogCode.Accepted or not dialog.changes:
+            return
+        changes = dialog.changes
+        submit(
+            lambda: self._api.update_quarry(quarry.id, changes),
+            lambda _q: self.refresh(),
+            self._error_label.setText,
+        )
 
     # --- Creation -----------------------------------------------------------------
 

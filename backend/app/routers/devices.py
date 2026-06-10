@@ -9,8 +9,16 @@ from app.db.models.blast import Calibration, Device
 from app.db.models.user import UserProfile
 from app.db.session import get_db
 from app.dependencies import get_current_user
-from app.schemas.blast import CalibrationCreate, CalibrationRead, DeviceCreate, DeviceRead
+from app.schemas.blast import (
+    CalibrationCreate,
+    CalibrationRead,
+    CalibrationUpdate,
+    DeviceCreate,
+    DeviceRead,
+    DeviceUpdate,
+)
 from app.schemas.common import PaginatedResponse
+from app.services.audit import apply_update
 
 router = APIRouter()
 
@@ -58,6 +66,26 @@ async def get_device(
     return device
 
 
+@router.patch("/{device_id}", response_model=DeviceRead)
+async def patch_device(
+    device_id: UUID,
+    body: DeviceUpdate,
+    current_user: UserProfile = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Device:
+    result = await db.execute(select(Device).where(Device.id == device_id))
+    device = result.scalar_one_or_none()
+    if device is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
+    changes = body.model_dump(exclude_unset=True)
+    if changes:
+        apply_update(
+            db, actor_id=current_user.id, entity=device,
+            entity_type="device", changes=changes,
+        )
+    return device
+
+
 @router.get("/{device_id}/calibrations", response_model=PaginatedResponse[CalibrationRead])
 async def list_calibrations(
     device_id: UUID,
@@ -96,4 +124,31 @@ async def add_calibration(
     )
     db.add(calibration)
     await db.flush()
+    return calibration
+
+
+@router.patch("/{device_id}/calibrations/{calibration_id}", response_model=CalibrationRead)
+async def patch_calibration(
+    device_id: UUID,
+    calibration_id: UUID,
+    body: CalibrationUpdate,
+    current_user: UserProfile = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Calibration:
+    """EDIT-1: только ``is_active`` — матрицы фиксированы, новая калибровка = новая запись."""
+    result = await db.execute(
+        select(Calibration).where(
+            Calibration.id == calibration_id,
+            Calibration.device_id == device_id,
+        )
+    )
+    calibration = result.scalar_one_or_none()
+    if calibration is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Calibration not found")
+    changes = body.model_dump(exclude_unset=True)
+    if changes:
+        apply_update(
+            db, actor_id=current_user.id, entity=calibration,
+            entity_type="calibration", changes=changes,
+        )
     return calibration

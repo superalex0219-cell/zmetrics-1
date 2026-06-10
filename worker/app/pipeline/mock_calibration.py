@@ -4,7 +4,7 @@ import asyncio
 import json
 import time
 
-from app.pipeline.interfaces import PipelineContext, PipelineStep, StepResult
+from app.pipeline.interfaces import PipelineContext, PipelineStep, StepResult, pipeline_prefix
 
 
 class MockCalibrationStep(PipelineStep):
@@ -14,7 +14,7 @@ class MockCalibrationStep(PipelineStep):
         t0 = time.monotonic()
         await asyncio.sleep(0.1)
 
-        output_key = f"sessions/{ctx.capture_session_id}/pipeline/calibration_params.json"
+        output_key = f"{pipeline_prefix(ctx)}/calibration_params.json"
 
         params = {
             "source": "mock",

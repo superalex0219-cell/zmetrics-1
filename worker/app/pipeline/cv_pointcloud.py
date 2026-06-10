@@ -5,7 +5,7 @@ import time
 
 import numpy as np
 
-from app.pipeline.interfaces import PipelineContext, PipelineStep, StepResult
+from app.pipeline.interfaces import PipelineContext, PipelineStep, StepResult, pipeline_prefix
 
 
 class CVPointCloudStep(PipelineStep):
@@ -13,7 +13,7 @@ class CVPointCloudStep(PipelineStep):
 
     async def execute(self, ctx: PipelineContext, previous_results: list[StepResult]) -> StepResult:
         t0 = time.monotonic()
-        base = f"sessions/{ctx.capture_session_id}/pipeline/point_cloud"
+        base = f"{pipeline_prefix(ctx)}/point_cloud"
         cloud_key = f"{base}/cloud.npy"
 
         # Idempotency
@@ -29,14 +29,14 @@ class CVPointCloudStep(PipelineStep):
             pass
 
         try:
-            depth_key = f"sessions/{ctx.capture_session_id}/pipeline/depth_estimation/depth_map.npy"
+            depth_key = f"{pipeline_prefix(ctx)}/depth_estimation/depth_map.npy"
             resp = ctx.storage_client.get_object(Bucket=ctx.bucket_artifacts, Key=depth_key)
             depth_map = np.load(io.BytesIO(resp["Body"].read()))
 
             # Load calibration to get fx, fy, cx, cy for back-projection
             cal_resp = ctx.storage_client.get_object(
                 Bucket=ctx.bucket_artifacts,
-                Key=f"sessions/{ctx.capture_session_id}/pipeline/calibration_params.json",
+                Key=f"{pipeline_prefix(ctx)}/calibration_params.json",
             )
             cal = json.loads(cal_resp["Body"].read())
             m = cal["left_camera_matrix"]

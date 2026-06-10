@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.db.models.analysis import JobStatus
 
@@ -9,6 +9,8 @@ from app.db.models.analysis import JobStatus
 class AnalysisJobCreate(BaseModel):
     # capture_session_id comes from the URL path, not the body.
     model_version_id: UUID | None = None
+    # Which frame pair of the session to analyze (series capture, CAP-MULTI).
+    frame_index: int = Field(default=0, ge=0)
 
 
 class AnalysisJobRead(BaseModel):
@@ -17,6 +19,7 @@ class AnalysisJobRead(BaseModel):
     id: UUID
     capture_session_id: UUID
     model_version_id: UUID | None
+    frame_index: int
     celery_task_id: str | None
     status: JobStatus
     queued_at: datetime

@@ -5,7 +5,7 @@ import time
 
 import numpy as np
 
-from app.pipeline.interfaces import PipelineContext, PipelineStep, StepResult
+from app.pipeline.interfaces import PipelineContext, PipelineStep, StepResult, pipeline_prefix
 
 
 class CVStereoDepthStep(PipelineStep):
@@ -19,7 +19,7 @@ class CVStereoDepthStep(PipelineStep):
     async def execute(self, ctx: PipelineContext, previous_results: list[StepResult]) -> StepResult:
         import cv2
         t0 = time.monotonic()
-        base = f"sessions/{ctx.capture_session_id}/pipeline/depth_estimation"
+        base = f"{pipeline_prefix(ctx)}/depth_estimation"
         depth_key = f"{base}/depth_map.npy"
         disp_key = f"{base}/disparity.npy"
 
@@ -36,7 +36,7 @@ class CVStereoDepthStep(PipelineStep):
             pass
 
         try:
-            rect_base = f"sessions/{ctx.capture_session_id}/pipeline/rectification"
+            rect_base = f"{pipeline_prefix(ctx)}/rectification"
 
             def _read_image(key: str) -> np.ndarray:
                 resp = ctx.storage_client.get_object(Bucket=ctx.bucket_artifacts, Key=key)
