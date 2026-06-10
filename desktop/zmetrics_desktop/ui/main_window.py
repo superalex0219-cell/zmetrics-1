@@ -151,6 +151,10 @@ class MainWindow(QMainWindow):
             from zmetrics_desktop.ui.capture import CaptureScreen
 
             return CaptureScreen(self._context, self._state)
+        if nav_label == "Отчёты":
+            from zmetrics_desktop.ui.reports import ReportsScreen
+
+            return ReportsScreen(self._context, self._state)
         return _placeholder(title)
 
     # --- Auth toolbar -----------------------------------------------------------
