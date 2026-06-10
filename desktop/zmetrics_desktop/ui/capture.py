@@ -358,7 +358,21 @@ class CaptureScreen(QWidget):
         ready = not missing
         self._capture_button.setEnabled(ready)
         if ready:
-            self._ready_label.setText("✅ Готово к съёмке — кадр уйдёт на анализ")
+            text = "✅ Готово к съёмке — кадр уйдёт на анализ"
+            # Стерео-кадр + тестовое устройство = заглушечная калибровка: реальный
+            # CV-контур честно упадёт. Предупреждаем заранее, не блокируя mock-тесты.
+            device = self._selected_device()
+            if (
+                self._last_frame is not None
+                and self._last_frame.side_by_side
+                and device is not None
+                and device.serial_number.startswith("TEST-")
+            ):
+                text += (
+                    " · ⚠ выбрано тестовое устройство — для реального анализа "
+                    "зарегистрируйте ZED (заводская калибровка)"
+                )
+            self._ready_label.setText(text)
             self._ready_label.setStyleSheet("color: #2a7;")
             self._capture_button.setToolTip("")
         else:
@@ -366,6 +380,12 @@ class CaptureScreen(QWidget):
             self._ready_label.setText(text)
             self._ready_label.setStyleSheet("color: #c80;")
             self._capture_button.setToolTip(text)
+
+    def _selected_device(self) -> Device | None:
+        index = self._device_combo.currentIndex()
+        if 0 <= index < len(self._devices):
+            return self._devices[index]
+        return None
 
     # --- Preview ----------------------------------------------------------------------
 

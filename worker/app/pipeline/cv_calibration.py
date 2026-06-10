@@ -42,6 +42,18 @@ class CVCalibrationStep(PipelineStep):
             if cal_row is None:
                 raise ValueError(f"Calibration {session_row.calibration_id} not found")
 
+            # Fail fast on stub calibrations (identity camera matrix, fx=1.0):
+            # the real stereo path would silently produce garbage metric depth.
+            fx = float(cal_row.left_camera_matrix.get("fx", 0.0))
+            fy = float(cal_row.left_camera_matrix.get("fy", 0.0))
+            if fx < 50.0 or fy < 50.0:
+                raise ValueError(
+                    f"Calibration {cal_row.id} looks like a test stub "
+                    f"(fx={fx:g}, fy={fy:g} px) — real stereo needs a real camera "
+                    "calibration. Register the ZED factory calibration "
+                    "(кнопка «Зарегистрировать ZED» на экране съёмки)."
+                )
+
             params = {
                 "source": "opencv",
                 "baseline_mm": float(cal_row.baseline_mm),

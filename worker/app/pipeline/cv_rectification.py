@@ -24,7 +24,22 @@ def _dict_to_dist(d: dict) -> np.ndarray:
 
 
 def _dict_to_matrix(d: dict) -> np.ndarray:
-    return np.array(d["data"], dtype=np.float64)
+    """Matrix from ``{rows, cols, data}`` where data may be nested or flat.
+
+    Clients store JSONB matrices in both shapes (the desktop test-device stub
+    uses a flat 9-element list) — reshape instead of crashing inside
+    cv2.stereoRectify/Rodrigues with "srcSz is [1 x 9]".
+    """
+    arr = np.array(d["data"], dtype=np.float64)
+    rows, cols = d.get("rows"), d.get("cols")
+    if rows and cols:
+        return arr.reshape(int(rows), int(cols))
+    if arr.ndim == 1:
+        if arr.size == 9:
+            return arr.reshape(3, 3)
+        if arr.size == 3:
+            return arr.reshape(3, 1)
+    return arr
 
 
 async def _load_frame_async(ctx: PipelineContext, artifact_type_str: str) -> np.ndarray | None:
