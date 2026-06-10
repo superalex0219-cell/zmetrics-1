@@ -221,8 +221,9 @@ Bug hunts are periodic code-review tasks run by an executor agent (no UI needed)
       моно-режим (только left_frame) → mock-пайплайн (`ENABLE_SAM3=false`) → P80 в UI;
       оффлайн-сценарий: стоп backend → снять кадр → очередь в статус-баре → старт
       backend → автослив ≤30 c, без дублей
-- [ ] Screens: отчёты (Rosin-Rammler кривая, JSON export, mock badge) + рекомендации
-      (read-only suggestions, Принять/Отклонить/Ознакомлен)
+- [x] Screens: отчёты (детали анализа + гистограмма, JSON export с blaster+, крупный
+      mock badge) + рекомендации (read-only suggestions, Принять/Отклонить/Рассмотрена
+      только кликом с подтверждением) — 105 tests green
 - [ ] **UT-D4 — отчёты и рекомендации** *(совмещён с UT-2 ниже — выполнить его
       чек-лист через десктоп)*: бейдж «⚠ Синтетические данные», экспорт JSON,
       suggestions нередактируемы, статус меняется только кнопками
