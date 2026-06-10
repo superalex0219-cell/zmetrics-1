@@ -159,6 +159,10 @@ class MainWindow(QMainWindow):
             from zmetrics_desktop.ui.recommendations import RecommendationsScreen
 
             return RecommendationsScreen(self._context, self._state)
+        if nav_label == "Администрирование":
+            from zmetrics_desktop.ui.admin import AdminScreen
+
+            return AdminScreen(self._context, self._state)
         return _placeholder(title)
 
     # --- Auth toolbar -----------------------------------------------------------

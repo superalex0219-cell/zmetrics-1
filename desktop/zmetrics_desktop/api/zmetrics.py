@@ -14,6 +14,7 @@ from pydantic import BaseModel
 
 from zmetrics_desktop.api.client import ApiClient
 from zmetrics_desktop.models import (
+    AdminUser,
     AnalysisJob,
     AnalysisResult,
     Artifact,
@@ -28,6 +29,8 @@ from zmetrics_desktop.models import (
     Recommendation,
     Report,
     SiteSection,
+    UserCreateResult,
+    UserQuarryAccess,
 )
 
 T = TypeVar("T", bound=BaseModel)
@@ -195,7 +198,44 @@ class ZMetricsApi:
             self._client.get(f"/captures/{session_id}/jobs/{job_id}/result")
         )
 
-    # --- Admin ------------------------------------------------------------------------------
+    # --- Admin: user management (ADMIN-USERS) ------------------------------------------------
+
+    def admin_list_users(self) -> list[AdminUser]:
+        return _items(self._client.get("/admin/users", params={"page_size": 200}), AdminUser)
+
+    def admin_create_user(self, email: str, full_name: str) -> UserCreateResult:
+        """Возвращает временный пароль РОВНО один раз — не хранить и не логировать."""
+        return UserCreateResult.model_validate(
+            self._client.post("/admin/users", json={"email": email, "full_name": full_name})
+        )
+
+    def admin_update_user(self, user_id: str, body: dict) -> AdminUser:
+        return AdminUser.model_validate(self._client.patch(f"/admin/users/{user_id}", json=body))
+
+    def admin_deactivate_user(self, user_id: str) -> None:
+        self._client.delete(f"/admin/users/{user_id}")
+
+    def admin_reset_password(self, user_id: str) -> str:
+        """Возвращает новый временный пароль РОВНО один раз."""
+        payload = self._client.post(f"/admin/users/{user_id}/reset-password", json={})
+        return payload["temporary_password"]
+
+    def admin_user_access(self, user_id: str) -> list[UserQuarryAccess]:
+        return [
+            UserQuarryAccess.model_validate(item)
+            for item in self._client.get(f"/admin/users/{user_id}/access")
+        ]
+
+    def admin_grant_access(self, quarry_id: str, user_id: str, role_name: str) -> dict:
+        return self._client.post(
+            f"/admin/quarries/{quarry_id}/access",
+            json={"user_id": user_id, "quarry_id": quarry_id, "role_name": role_name},
+        )
+
+    def admin_revoke_access(self, quarry_id: str, access_id: str) -> None:
+        self._client.delete(f"/admin/quarries/{quarry_id}/access/{access_id}")
+
+    # --- Admin: audit ---------------------------------------------------------------------------
 
     def passport_audit_log(self, passport_id: str) -> list[AuditLogEntry]:
         """Admin-only; callers must treat a 403 as an empty list."""

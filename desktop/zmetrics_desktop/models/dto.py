@@ -163,6 +163,28 @@ class QuarryAccessEntry(_Dto):
     role_level: int  # 1..4
 
 
+class AdminUser(_Dto):
+    id: str
+    email: str
+    full_name: str
+    is_active: bool
+    created_at: str
+
+
+class UserCreateResult(_Dto):
+    user: AdminUser
+    # Показывается РОВНО один раз; не хранить, не логировать, очищать из state.
+    temporary_password: str
+
+
+class UserQuarryAccess(_Dto):
+    access_id: str
+    quarry_id: str
+    quarry_name: str
+    role_name: str
+    role_level: int
+
+
 class AuditLogEntry(_Dto):
     id: str
     actor_id: str | None = None

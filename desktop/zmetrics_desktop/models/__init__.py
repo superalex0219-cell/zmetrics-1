@@ -4,6 +4,7 @@ These are plain data-transfer objects for the client — they must not import ba
 models.
 """
 from zmetrics_desktop.models.dto import (
+    AdminUser,
     AnalysisJob,
     AnalysisResult,
     Artifact,
@@ -19,9 +20,12 @@ from zmetrics_desktop.models.dto import (
     Report,
     SiteSection,
     SizeBin,
+    UserCreateResult,
+    UserQuarryAccess,
 )
 
 __all__ = [
+    "AdminUser",
     "AnalysisJob",
     "AnalysisResult",
     "Artifact",
@@ -37,4 +41,6 @@ __all__ = [
     "Report",
     "SiteSection",
     "SizeBin",
+    "UserCreateResult",
+    "UserQuarryAccess",
 ]
