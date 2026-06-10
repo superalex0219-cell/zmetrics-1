@@ -1,0 +1,13 @@
+# Overlay: NVIDIA GPU for the worker (real SAM3 inference).
+# Usage:
+#   docker compose -f infra\docker-compose.yml -f infra\docker-compose.gpu.yml up -d
+# Pair with ENABLE_SAM3=true in infra/.env.
+services:
+  worker:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

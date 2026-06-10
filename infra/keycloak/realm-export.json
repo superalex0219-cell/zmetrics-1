@@ -120,6 +120,14 @@
         }
       ],
       "realmRoles": ["zmetrics-admin"]
+    },
+    {
+      "username": "service-account-zmetrics-backend",
+      "enabled": true,
+      "serviceAccountClientId": "zmetrics-backend",
+      "clientRoles": {
+        "realm-management": ["manage-users", "view-users", "query-users"]
+      }
     }
   ]
 }

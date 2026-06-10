@@ -93,6 +93,9 @@ services:
       KC_PUBLIC_URL: http://localhost:8080
       KC_REALM: ${KC_REALM}
       KC_CLIENT_ID: ${KC_CLIENT_ID}
+      KC_CLIENT_SECRET: ${KC_CLIENT_SECRET:-changeme-replace-in-production}
+      # Pydantic-settings field enable_admin_user_management → this exact env name.
+      ENABLE_ADMIN_USER_MANAGEMENT: ${ENABLE_ADMIN_USER_MANAGEMENT:-false}
       BACKEND_CORS_ORIGINS: '["http://localhost:3000","http://localhost:5173"]'
       ENABLE_DEV_SEED: "true"
     ports:
@@ -125,22 +128,24 @@ services:
       MINIO_BUCKET_FRAMES: ${MINIO_BUCKET_FRAMES}
       MINIO_BUCKET_ARTIFACTS: ${MINIO_BUCKET_ARTIFACTS}
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
+      ENABLE_SAM3: ${ENABLE_SAM3:-false}
       SAM3_MODEL_PATH: ${SAM3_MODEL_PATH:-/models/sam3}
       SAM3_TEXT_PROMPT: ${SAM3_TEXT_PROMPT:-rock fragment}
       SAM3_CONFIDENCE_THRESHOLD: ${SAM3_CONFIDENCE_THRESHOLD:-0.5}
+      ENABLE_REAL_STEREO: ${ENABLE_REAL_STEREO:-false}
+      ENABLE_LLM_RECOMMENDATIONS: ${ENABLE_LLM_RECOMMENDATIONS:-false}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-claude-sonnet-4-6}
+      LLM_TIMEOUT_S: ${LLM_TIMEOUT_S:-20}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-512}
     volumes:
       - ${SAM3_WEIGHTS_DIR:-../models/sam3}:/models/sam3:ro
     command: >
       celery -A app.celery_app worker
       --loglevel=info
       --concurrency=${WORKER_CONCURRENCY:-2}
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+    # GPU reservation lives in docker-compose.gpu.yml (overlay) — the base stack must
+    # start on machines without an NVIDIA GPU (ENABLE_SAM3=false → mock segmentation).
     depends_on:
       postgres:
         condition: service_healthy
