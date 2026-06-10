@@ -113,14 +113,50 @@ def test_export_writes_json_file(qapp, tmp_path, monkeypatch):
     screen._render_reports([_REPORT])
     screen._table.selectRow(0)
     assert screen._export_button.isVisibleTo(screen)
+    assert screen._format_combo.isVisibleTo(screen)
 
+    # Формат JSON (последний в списке)
+    idx = screen._format_combo.findData("json")
+    screen._format_combo.setCurrentIndex(idx)
     target = tmp_path / "report.json"
     monkeypatch.setattr(
         QFileDialog, "getSaveFileName",
         staticmethod(lambda *a, **k: (str(target), "JSON (*.json)")),
     )
-    screen._export_json()
+    screen._export()
 
-    saved = json.loads(target.read_text(encoding="utf-8"))
+    saved = json.loads(target.read_bytes())
     assert saved["report"]["id"] == "r1"
     assert "⚠" in saved["note"]
+
+
+def test_export_pdf_passes_format_and_writes_bytes(qapp, tmp_path, monkeypatch):
+    state = AppState()
+    state.set_quarry(_Q1)
+    state.set_access(_access(3))  # blaster
+
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/v1/reports/r1/export":
+            seen["format"] = request.url.params.get("format")
+            return httpx.Response(
+                200, content=b"%PDF-1.7 fake", headers={"Content-Type": "application/pdf"}
+            )
+        return httpx.Response(200, json={"items": [], "total": 0, "page": 1, "page_size": 50})
+
+    context = SimpleNamespace(api=ApiClient(Settings(), transport=httpx.MockTransport(handler)))
+    screen = ReportsScreen(context, state)
+    screen._render_reports([_REPORT])
+    screen._table.selectRow(0)
+    screen._format_combo.setCurrentIndex(screen._format_combo.findData("pdf"))
+
+    target = tmp_path / "report.pdf"
+    monkeypatch.setattr(
+        QFileDialog, "getSaveFileName",
+        staticmethod(lambda *a, **k: (str(target), "PDF (*.pdf)")),
+    )
+    screen._export()
+
+    assert seen["format"] == "pdf"
+    assert target.read_bytes().startswith(b"%PDF")

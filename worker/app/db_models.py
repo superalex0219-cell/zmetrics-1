@@ -26,6 +26,25 @@ class JobStatus(str, enum.Enum):
     FAILED = "failed"
 
 
+class ModelVersion(Base):
+    """Registry entry; the real-CV pipeline registers itself here so reports
+    can derive the analysis method (mock vs real) from the job's model."""
+
+    __tablename__ = "model_version"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    version_tag: Mapped[str] = mapped_column(String(100), nullable=False)
+    model_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    artifact_storage_key: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    is_active: Mapped[bool] = mapped_column(nullable=False, default=False)
+    metrics: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
 class AnalysisJob(Base):
     __tablename__ = "analysis_job"
 

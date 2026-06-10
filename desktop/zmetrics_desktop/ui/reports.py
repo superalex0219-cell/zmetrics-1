@@ -1,12 +1,11 @@
-"""Reports screen: list per quarry, analysis detail, JSON export, mock badge.
+"""Reports screen: list per quarry, analysis detail, export, mock badge.
 
 Метод анализа (mock/real) показывается крупно и явно — отчёты mock-пайплайна помечены
-«⚠ Синтетические данные». Экспорт JSON доступен с роли blaster (серверная проверка
-дублируется гейтингом кнопки).
+«⚠ Синтетические данные». Экспорт (PDF/DOCX/XLSX/CSV/JSON, REPORT-X) доступен
+с роли blaster (серверная проверка дублируется гейтингом кнопки).
 """
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -116,10 +115,23 @@ class ReportsScreen(QWidget):
         self._histogram = HistogramWidget()
         layout.addWidget(self._histogram, stretch=1)
 
-        self._export_button = QPushButton("Экспорт JSON…")
-        self._export_button.setVisible(False)  # blaster+
-        self._export_button.clicked.connect(self._export_json)
+        self._format_label = QLabel("Формат:")
+        self._format_combo = QComboBox()
+        for label, fmt in [
+            ("PDF", "pdf"),
+            ("Word (DOCX)", "docx"),
+            ("Excel (XLSX)", "xlsx"),
+            ("CSV", "csv"),
+            ("JSON", "json"),
+        ]:
+            self._format_combo.addItem(label, fmt)
+        self._export_button = QPushButton("Экспорт…")
+        self._export_button.clicked.connect(self._export)
+        for widget in (self._format_label, self._format_combo, self._export_button):
+            widget.setVisible(False)  # blaster+
         export_row = QHBoxLayout()
+        export_row.addWidget(self._format_label)
+        export_row.addWidget(self._format_combo)
         export_row.addWidget(self._export_button)
         export_row.addStretch(1)
         layout.addLayout(export_row)
@@ -267,34 +279,48 @@ class ReportsScreen(QWidget):
 
     def _apply_role_gating(self) -> None:
         quarry_id = self._state.quarry.id if self._state.quarry else None
-        self._export_button.setVisible(
+        visible = (
             self._selected is not None
             and self._state.role_level(quarry_id) >= ROLE_BLASTER
         )
+        for widget in (self._format_label, self._format_combo, self._export_button):
+            widget.setVisible(visible)
 
     # --- Export ----------------------------------------------------------------------
 
-    def _export_json(self) -> None:
+    _EXPORT_FILTERS = {
+        "pdf": "PDF (*.pdf)",
+        "docx": "Word (*.docx)",
+        "xlsx": "Excel (*.xlsx)",
+        "csv": "CSV (*.csv)",
+        "json": "JSON (*.json)",
+    }
+
+    def _export(self) -> None:
         report = self._selected
-        if report is None:
+        fmt = self._format_combo.currentData()
+        if report is None or not fmt:
             return
-        default_name = f"report_{report.id[:8]}_{report.created_at[:10]}.json"
+        default_name = f"report_{report.id[:8]}_{report.created_at[:10]}.{fmt}"
         path, _filter = QFileDialog.getSaveFileName(
-            self, "Сохранить отчёт", default_name, "JSON (*.json)"
+            self, "Сохранить отчёт", default_name, self._EXPORT_FILTERS[fmt]
         )
         if not path:
             return
         self._error_label.clear()
+        self._export_button.setEnabled(False)
 
         def export() -> str:
-            payload = self._api.export_report(report.id)
-            Path(path).write_text(
-                json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
-            )
+            content = self._api.export_report(report.id, fmt)
+            Path(path).write_bytes(content)
             return path
 
-        submit(
-            export,
-            lambda saved: self._error_label.setText(""),
-            self._error_label.setText,
-        )
+        def done(_saved: object) -> None:
+            self._export_button.setEnabled(True)
+            self._error_label.setText("")
+
+        def failed(message: str) -> None:
+            self._export_button.setEnabled(True)
+            self._error_label.setText(message)
+
+        submit(export, done, failed)

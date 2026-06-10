@@ -130,6 +130,18 @@ async def _run_pipeline_async(job_id: UUID) -> dict:
             particles_step = MockParticleVolumeStep()
             granulometry_step = MockGranulometryStep()
 
+        # Real CV runs register a ModelVersion on the job: the backend derives
+        # the mock/real safety label for reports from ModelVersion.model_type.
+        if use_real_granulometry and job.model_version_id is None:
+            seg = "sam3" if settings.enable_sam3 else "mock"
+            job.model_version_id = await _ensure_model_version(
+                db, version_tag=f"{seg}+{settings.depth_backend}"
+            )
+
+        # Report visuals (mask overlay + colorized depth) — tolerant auxiliary
+        # step: missing frame/depth only reduces what the export can show.
+        from app.pipeline.cv_report_visuals import ReportVisualsStep
+
         pipeline = Pipeline([
             calibration_step,
             rectification_step,
@@ -138,6 +150,7 @@ async def _run_pipeline_async(job_id: UUID) -> dict:
             segmentation_step,
             particles_step,
             granulometry_step,
+            ReportVisualsStep(),
         ])
 
         try:
@@ -202,6 +215,27 @@ async def _load_job(db, job_id: UUID):
         # Fallback: use raw SQL to update job status
         logger.warning("pipeline_model_import_failed", job_id=str(job_id))
         return None
+
+
+async def _ensure_model_version(db, version_tag: str):
+    """Get-or-create the ModelVersion row describing the real CV pipeline."""
+    from sqlalchemy import select
+
+    from app.db_models import ModelVersion
+
+    existing = (await db.execute(
+        select(ModelVersion).where(ModelVersion.version_tag == version_tag)
+    )).scalar_one_or_none()
+    if existing is not None:
+        return existing.id
+    mv = ModelVersion(
+        name="CV pipeline",
+        version_tag=version_tag,
+        model_type="cv",
+    )
+    db.add(mv)
+    await db.flush()
+    return mv.id
 
 
 async def _has_right_frame(db, capture_session_id: UUID, frame_index: int = 0) -> bool:
@@ -312,6 +346,7 @@ async def _create_report_and_recommendation(
         target_p80_mm=target_p80_mm,
         p10_mm=p10,
         p50_mm=p50,
+        analysis_method=analysis_method,
     )
 
     # Optional LLM-enhanced prose. Falls back to the deterministic rule text on
@@ -324,6 +359,7 @@ async def _create_report_and_recommendation(
         confidence_score=conf,
         target_p80_mm=target_p80_mm,
         settings=get_settings(),
+        analysis_method=analysis_method,
     )
 
     # SAFETY: always REQUIRES_HUMAN_REVIEW — never auto-accept.

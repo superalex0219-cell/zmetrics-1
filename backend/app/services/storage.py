@@ -37,6 +37,11 @@ class StorageService:
         )
         return key
 
+    def download_bytes(self, bucket: str, key: str) -> bytes:
+        """Read a whole object into memory (report visuals are small PNGs)."""
+        resp = self._client.get_object(Bucket=bucket, Key=key)
+        return resp["Body"].read()
+
     def get_presigned_url(self, bucket: str, key: str, expires_in: int = 3600) -> str:
         """Generate a presigned GET URL valid for `expires_in` seconds."""
         return self._client.generate_presigned_url(

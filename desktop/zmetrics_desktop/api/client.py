@@ -82,6 +82,15 @@ class ApiClient:
     def get(self, path: str, params: dict | None = None) -> Any:
         return self._request("GET", path, params=params)
 
+    def get_bytes(self, path: str, params: dict | None = None) -> bytes:
+        """GET returning the raw body (file downloads: PDF/DOCX/XLSX/CSV exports)."""
+        resp = self._client.request("GET", path, params=params, headers=self._headers())
+        if resp.status_code == 401 and self._refresher is not None and self._refresher():
+            resp = self._client.request("GET", path, params=params, headers=self._headers())
+        if resp.is_success:
+            return resp.content
+        raise ApiError(resp.status_code, _extract_detail(resp))
+
     def post(self, path: str, json: dict | None = None) -> Any:
         return self._request("POST", path, json=json)
 

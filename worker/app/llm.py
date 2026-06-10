@@ -62,13 +62,15 @@ def enhance_recommendation_text(
     confidence_score: float,
     target_p80_mm: float | None,
     settings: WorkerSettings,
+    analysis_method: str = "mock",
 ) -> str:
     """
     Return an LLM-enhanced recommendation string, or the deterministic
     ``rule_result.recommendation_text`` on any failure / when disabled.
 
-    Guarantees: the returned string always starts with ``MOCK_BADGE`` and ends
-    with ``REVIEW_FOOTER`` (enforced in code, not trusted to the model).
+    Guarantees: the returned string always starts with the method badge
+    (``badge_for(analysis_method)``) and ends with ``REVIEW_FOOTER`` —
+    enforced in code, not trusted to the model.
     """
     # 1. Disabled / no key → silent fallback to the deterministic rule text.
     if not settings.enable_llm_recommendations or not settings.anthropic_api_key:
@@ -117,7 +119,7 @@ def enhance_recommendation_text(
         return rule_result.recommendation_text
 
     # 6. Enforce the safety wrapper regardless of what the model returned.
-    wrapped = _wrap_with_safety(body)
+    wrapped = _wrap_with_safety(body, analysis_method=analysis_method)
     logger.info("llm_enhanced", model=settings.llm_model)
     return wrapped
 
@@ -173,17 +175,18 @@ def _extract_text(response) -> str:
     return "".join(parts)
 
 
-def _wrap_with_safety(body: str) -> str:
+def _wrap_with_safety(body: str, analysis_method: str = "mock") -> str:
     """Guarantee the badge prefix and review footer around the model's prose.
 
-    ``MOCK_BADGE`` / ``REVIEW_FOOTER`` come from ``app.rules`` — single source
+    ``badge_for`` / ``REVIEW_FOOTER`` come from ``app.rules`` — single source
     of truth shared with the M5-a deterministic text.
     """
-    from app.rules import MOCK_BADGE, REVIEW_FOOTER
+    from app.rules import REVIEW_FOOTER, badge_for
 
+    badge = badge_for(analysis_method)
     body = body.strip()
-    if not body.startswith(MOCK_BADGE):
-        body = MOCK_BADGE + "\n" + body
+    if not body.startswith(badge):
+        body = badge + "\n" + body
     if not body.endswith(REVIEW_FOOTER):
         body = body + "\n" + REVIEW_FOOTER
     return body

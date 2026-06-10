@@ -15,7 +15,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 MOCK_BADGE = "⚠ Синтетические данные — результаты получены mock-пайплайном."
+REAL_CV_BADGE = (
+    "Результаты получены реальным CV-пайплайном (SAM3 + стерео-глубина). "
+    "Рекомендация сгенерирована автоматически и требует проверки."
+)
 REVIEW_FOOTER = "Перед изменением параметров взрывания требуется проверка специалистом."
+
+
+def badge_for(analysis_method: str) -> str:
+    """Single source of truth for the safety badge by analysis method."""
+    return REAL_CV_BADGE if analysis_method == "cv" else MOCK_BADGE
 
 OVERSIZE_FACTOR = 1.1  # P80 more than 10% over target → oversize
 FINES_THRESHOLD = 15.0  # fines_percent above this → excessive_fines
@@ -36,8 +45,14 @@ def evaluate_fragmentation(
     target_p80_mm: float | None,
     p10_mm: float | None = None,
     p50_mm: float | None = None,
+    analysis_method: str = "mock",
 ) -> RuleResult:
-    """Compare actual fragmentation metrics against the passport target."""
+    """Compare actual fragmentation metrics against the passport target.
+
+    ``analysis_method`` ("mock" | "cv") selects the safety badge: synthetic
+    results are loudly labelled, real-CV results state their origin instead of
+    being mislabelled as mock.
+    """
 
     flags: list[str] = []
 
@@ -80,7 +95,7 @@ def evaluate_fragmentation(
     metric_parts.append(f"P80={p80_mm:.0f}мм")
     metrics_line = ", ".join(metric_parts) + f". Уровень достоверности: {confidence_score:.2f}."
 
-    lines: list[str] = [MOCK_BADGE, metrics_line]
+    lines: list[str] = [badge_for(analysis_method), metrics_line]
 
     if target_p80_mm is None:
         lines.append("Целевой P80 в паспорте БВР не задан — сравнение недоступно.")

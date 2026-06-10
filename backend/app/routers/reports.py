@@ -1,4 +1,3 @@
-import json
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -88,64 +87,61 @@ async def get_report(
 @router.get("/{report_id}/export")
 async def export_report(
     report_id: UUID,
+    format: str = "json",
     current_user: UserProfile = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
-    """Export report as a downloadable JSON file. PDF generation is M2+."""
+    """Export the report as JSON / CSV / XLSX / DOCX / PDF (REPORT-X).
+
+    The rendered file is also persisted to MinIO (``reports/{id}/``, STORE-1)
+    so report files live next to the rest of the analysis artifacts.
+    """
+    from app.services.report_export import (
+        EXPORT_FORMATS,
+        MEDIA_TYPES,
+        collect_report_data,
+        collect_report_images,
+        render,
+    )
+    from app.services.storage import get_storage_service
+
+    fmt = format.lower()
+    if fmt not in EXPORT_FORMATS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported format {format!r}; use one of {', '.join(EXPORT_FORMATS)}",
+        )
+
     quarry_id = await _quarry_id_for_report(report_id, db)
     await check_quarry_access(db, current_user.id, quarry_id, RoleLevel.BLASTER)
 
-    report = (await db.execute(select(Report).where(Report.id == report_id))).scalar_one_or_none()
-    if report is None:
+    data = await collect_report_data(db, report_id)
+    if data is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
 
-    from app.db.models.analysis import AnalysisResult
-    ar = (await db.execute(
-        select(AnalysisResult).where(AnalysisResult.id == report.analysis_result_id)
-    )).scalar_one_or_none()
+    storage = get_storage_service()
+    images: dict[str, bytes] = {}
+    if fmt in ("docx", "pdf"):
+        images = await collect_report_images(db, storage, data)
 
-    recs = list((await db.execute(
-        select(Recommendation).where(Recommendation.report_id == report_id)
-    )).scalars().all())
+    content = render(fmt, data, images)
 
-    payload = {
-        "export_format": "json_placeholder",
-        "note": "⚠ Mock pipeline — results are synthetic. PDF export available in M2.",
-        "report": {
-            "id": str(report.id),
-            "title": report.title,
-            "report_type": report.report_type,
-            "created_at": report.created_at.isoformat(),
-        },
-        "analysis_result": {
-            "p10_mm": float(ar.p10_mm) if ar and ar.p10_mm else None,
-            "p50_mm": float(ar.p50_mm) if ar and ar.p50_mm else None,
-            "p80_mm": float(ar.p80_mm) if ar and ar.p80_mm else None,
-            "rosin_rammler_n": float(ar.rosin_rammler_n) if ar and ar.rosin_rammler_n else None,
-            "rosin_rammler_xc": float(ar.rosin_rammler_xc) if ar and ar.rosin_rammler_xc else None,
-            "uniformity_index": float(ar.uniformity_index) if ar and ar.uniformity_index else None,
-            "oversize_percent": float(ar.oversize_percent) if ar and ar.oversize_percent else None,
-            "fines_percent": float(ar.fines_percent) if ar and ar.fines_percent else None,
-            "total_particles_counted": ar.total_particles_counted if ar else None,
-            "confidence_score": float(ar.confidence_score) if ar and ar.confidence_score else None,
-            "confidence_notes": ar.confidence_notes if ar else None,
-            "size_distribution": ar.size_distribution if ar else [],
-        } if ar else None,
-        "recommendations": [
-            {
-                "id": str(r.id),
-                "status": r.status.value,
-                "recommendation_text": r.recommendation_text,
-                "reviewed_at": r.reviewed_at.isoformat() if r.reviewed_at else None,
-            }
-            for r in recs
-        ],
-    }
+    # STORE-1: persist the rendered report file to MinIO (best-effort)
+    try:
+        import io as _io
+        storage.upload_file(
+            "zmetrics-artifacts",
+            f"reports/{report_id}/report.{fmt}",
+            _io.BytesIO(content),
+            content_type=MEDIA_TYPES[fmt],
+        )
+    except Exception:
+        pass  # выгрузка пользователю важнее кэша в MinIO
 
-    filename = f"report_{report_id}_{datetime.now(tz=timezone.utc).strftime('%Y%m%d')}.json"
+    filename = f"report_{report_id}_{datetime.now(tz=timezone.utc).strftime('%Y%m%d')}.{fmt}"
     return Response(
-        content=json.dumps(payload, ensure_ascii=False, indent=2),
-        media_type="application/json",
+        content=content,
+        media_type=MEDIA_TYPES[fmt],
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 

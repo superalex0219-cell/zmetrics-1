@@ -24,6 +24,11 @@ dependencies = [
     "python-multipart>=0.0.9",
     "structlog>=24.1.0",
     "aiofiles>=23.2.1",
+    # REPORT-X export renderers
+    "jinja2>=3.1",
+    "weasyprint>=62",
+    "python-docx>=1.1",
+    "openpyxl>=3.1",
 ]
 
 [project.optional-dependencies]

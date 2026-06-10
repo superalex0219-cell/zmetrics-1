@@ -140,8 +140,11 @@ class ZMetricsApi:
     def list_reports(self, quarry_id: str) -> list[Report]:
         return _items(self._client.get(f"/quarries/{quarry_id}/reports"), Report)
 
-    def export_report(self, report_id: str) -> dict:
-        return self._client.get(f"/reports/{report_id}/export")
+    def export_report(self, report_id: str, fmt: str = "json") -> bytes:
+        """Скачивает отчёт в выбранном формате (json/csv/xlsx/docx/pdf) как байты."""
+        return self._client.get_bytes(
+            f"/reports/{report_id}/export", params={"format": fmt}
+        )
 
     def list_recommendations(self, report_id: str) -> list[Recommendation]:
         return _items(

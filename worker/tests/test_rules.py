@@ -86,3 +86,20 @@ def test_confidence_notes_at_threshold():
 def test_recommendation_text_has_mock_badge():
     result = evaluate_fragmentation(p80_mm=450, fines_percent=5, confidence_score=0.9, target_p80_mm=500)
     assert "⚠" in result.recommendation_text
+
+
+def test_real_cv_badge_replaces_mock_badge():
+    """Реальный CV-контур не должен помечаться «синтетическими данными»."""
+    from app.rules import MOCK_BADGE, REAL_CV_BADGE, evaluate_fragmentation
+
+    result = evaluate_fragmentation(
+        p80_mm=300.0, fines_percent=5.0, confidence_score=0.9,
+        target_p80_mm=500.0, analysis_method="cv",
+    )
+    assert result.recommendation_text.startswith(REAL_CV_BADGE)
+    assert MOCK_BADGE not in result.recommendation_text
+
+    default = evaluate_fragmentation(
+        p80_mm=300.0, fines_percent=5.0, confidence_score=0.9, target_p80_mm=500.0,
+    )
+    assert default.recommendation_text.startswith(MOCK_BADGE)
