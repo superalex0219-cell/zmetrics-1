@@ -34,25 +34,11 @@ infra/secrets/
 # Local dev tooling / temp junk
 .tools/
 .codex_tmp/
-frontend;C/
 
 # Desktop client (PyInstaller output)
 desktop/build/
 desktop/dist/
 *.spec~
-
-# Flutter / Dart
-.dart_tool/
-.flutter-plugins
-.flutter-plugins-dependencies
-mobile/build/
-mobile/.dart_tool/
-mobile/android/.gradle/
-mobile/android/local.properties
-mobile/android/GeneratedPluginRegistrant.java
-mobile/ios/Pods/
-mobile/ios/.symlinks/
-*.dill
 
 # Docker / local volumes
 postgres_data/

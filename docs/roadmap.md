@@ -234,8 +234,11 @@ Bug hunts are periodic code-review tasks run by an executor agent (no UI needed)
       отозванный пользователь теряет карьер из списка; AuditLog пишется
 - [ ] SAM3 artifact metadata в панели завершённого job + `rock-sample.png` smoke без камеры
       *(перенесено из WEB-ANALYSIS-2)*
-- [ ] Remove `frontend/` + `mobile/`; drop `frontend` service from compose; prune
-      `zmetrics-web`/`zmetrics-mobile` Keycloak clients
+- [x] Remove `frontend/` + `mobile/`; drop `frontend` service from compose; prune
+      `zmetrics-web`/`zmetrics-mobile` Keycloak clients. Dev ROPC token flow moved to
+      `zmetrics-desktop` (`directAccessGrantsEnabled=true`); `rock-sample.png` saved to
+      `desktop/zmetrics_desktop/assets/`. ⚠ Running Keycloak still holds the old clients
+      until realm re-import (or delete them once via the admin console)
 - [ ] PyInstaller build (+ опц. инсталлятор); backend URL на первом запуске
 - [ ] **UT-D6 — сборка:** поставить .exe на чистую Windows (без Python/venv),
       подключиться к backend, пройти логин и один capture-цикл

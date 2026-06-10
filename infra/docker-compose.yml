@@ -96,7 +96,6 @@ services:
       KC_CLIENT_SECRET: ${KC_CLIENT_SECRET:-changeme-replace-in-production}
       # Pydantic-settings field enable_admin_user_management → this exact env name.
       ENABLE_ADMIN_USER_MANAGEMENT: ${ENABLE_ADMIN_USER_MANAGEMENT:-false}
-      BACKEND_CORS_ORIGINS: '["http://localhost:3000","http://localhost:5173"]'
       ENABLE_DEV_SEED: "true"
     ports:
       - "8000:8000"
@@ -151,17 +150,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    networks: [zmetrics]
-
-  frontend:
-    build:
-      context: ../frontend
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    ports:
-      - "5173:80"
-    depends_on:
-      - backend
     networks: [zmetrics]
 
   minio-init:
