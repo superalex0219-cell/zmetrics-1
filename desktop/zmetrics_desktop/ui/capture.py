@@ -131,6 +131,7 @@ class CaptureScreen(QWidget):
         self._calibrations: list[Calibration] = []
         self._cameras: list[CameraInfo] = []
         self._last_frame: StereoFrame | None = None
+        self._last_preview_pixmap: QPixmap | None = None
         self._preview_worker: _PreviewWorker | None = None
         # CAP-MULTI: серия пар кадров; каждый элемент {left_jpg, right_jpg|None, stereo}
         self._series: list[dict] = []
@@ -340,6 +341,10 @@ class CaptureScreen(QWidget):
         super().hideEvent(event)
         self._stop_preview()  # release the camera when leaving the screen
 
+    def resizeEvent(self, event: object) -> None:  # noqa: N802 — Qt naming
+        super().resizeEvent(event)  # type: ignore[arg-type]
+        self._render_preview_pixmap()
+
     def refresh(self) -> None:
         self._clear_error()
         self._load_cameras()
@@ -543,6 +548,8 @@ class CaptureScreen(QWidget):
     def _on_preview_stopped(self) -> None:
         self._preview_worker = None
         self._preview_button.setText("Старт превью")
+        self._last_preview_pixmap = None
+        self._preview_label.clear()
         self._preview_label.setText("Превью выключено")
         if self.isVisible():
             self._set_status("warning", "Превью остановлено.")
@@ -574,14 +581,23 @@ class CaptureScreen(QWidget):
             left.data, left.shape[1], left.shape[0], left.strides[0],
             QImage.Format.Format_BGR888,
         ).copy()
+        self._last_preview_pixmap = QPixmap.fromImage(image)
+        self._render_preview_pixmap()
+        self._apply_role_gating()
+
+    def _render_preview_pixmap(self) -> None:
+        if self._last_preview_pixmap is None:
+            return
+        size = self._preview_label.size()
+        if size.width() <= 1 or size.height() <= 1:
+            return
         self._preview_label.setPixmap(
-            QPixmap.fromImage(image).scaled(
-                self._preview_label.size(),
+            self._last_preview_pixmap.scaled(
+                size,
                 Qt.AspectRatioMode.KeepAspectRatio,
                 Qt.TransformationMode.SmoothTransformation,
             )
         )
-        self._apply_role_gating()
 
     # --- Series management (CAP-MULTI) ----------------------------------------------------
 

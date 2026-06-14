@@ -203,8 +203,32 @@ class MainWindow(QMainWindow):
                 color: #394b5f;
                 spacing: 8px;
             }
+            QToolBar {
+                border-bottom: 1px solid #d7dee8;
+                padding: 6px 10px;
+            }
             QToolBar QLabel, QStatusBar QLabel {
                 color: #394b5f;
+            }
+            QToolBar QToolButton {
+                background: #ffffff;
+                border: 1px solid #b8c7d8;
+                border-radius: 5px;
+                color: #243447;
+                min-height: 26px;
+                padding: 4px 12px;
+                margin-left: 6px;
+            }
+            QToolBar QToolButton:hover {
+                background: #f1f6fb;
+                border-color: #7fa7d5;
+            }
+            QToolBar QToolButton:pressed {
+                background: #d9ebff;
+            }
+            QToolBar QToolButton:disabled {
+                background: #eef1f5;
+                color: #8b98a8;
             }
             QGroupBox {
                 border: 1px solid #d7dee8;
