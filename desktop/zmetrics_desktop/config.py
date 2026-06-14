@@ -5,6 +5,7 @@ overridden by environment variables prefixed ``ZMETRICS_`` or a local ``.env`` f
 """
 from __future__ import annotations
 
+import platform
 from pathlib import Path
 
 from pydantic import Field
@@ -15,10 +16,16 @@ def _default_offline_db() -> Path:
     return Path.home() / ".zmetrics" / "offline.db"
 
 
+def _app_support_env() -> Path:
+    if platform.system() == "Darwin":
+        return Path.home() / "Library" / "Application Support" / "ZMetrics" / ".env"
+    return Path.home() / ".zmetrics" / ".env"
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="ZMETRICS_",
-        env_file=".env",
+        env_file=(".env", _app_support_env()),
         env_file_encoding="utf-8",
         extra="ignore",
     )

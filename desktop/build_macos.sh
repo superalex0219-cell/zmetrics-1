@@ -35,6 +35,7 @@ echo ">> cleaning previous build"
 rm -rf build dist
 
 echo ">> running PyInstaller"
+export PYINSTALLER_CONFIG_DIR="${PYINSTALLER_CONFIG_DIR:-build/pyinstaller-cache}"
 pyinstaller --noconfirm --clean zmetrics_desktop.spec
 
 APP="dist/ZMetrics.app"
