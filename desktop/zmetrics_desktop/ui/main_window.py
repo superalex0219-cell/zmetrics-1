@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QStackedWidget,
     QToolBar,
+    QVBoxLayout,
     QWidget,
 )
 
@@ -29,12 +30,15 @@ if TYPE_CHECKING:
     from zmetrics_desktop.context import AppContext
     from zmetrics_desktop.offline.sync_processor import SyncReport
 
+from zmetrics_desktop.ui.errors import human_error
+
 SYNC_INTERVAL_MS = 30_000  # drain the offline queue every 30 s
 AUTH_CHECK_INTERVAL_MS = 60_000  # проверка срока access-токена раз в минуту
 AUTH_REFRESH_MARGIN_S = 180.0  # обновляем за 3 минуты до истечения, не ждём 401
 
 # (nav label, screen title) in display order.
 SCREENS: list[tuple[str, str]] = [
+    ("Подключение", "Подключение к серверу"),
     ("Дашборд", "Дашборд"),
     ("Карьеры", "Карьеры"),
     ("Участки", "Участки / блоки"),
@@ -154,15 +158,14 @@ class MainWindow(QMainWindow):
         self._context = context
         self.setWindowTitle("ZMetrics")
         self.resize(1200, 800)
+        self._apply_light_theme()
 
         central = QWidget()
         layout = QHBoxLayout(central)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        self._nav = QListWidget()
-        self._nav.setFixedWidth(220)
-        self._nav.setObjectName("nav")
+        sidebar = self._build_sidebar()
 
         from zmetrics_desktop.ui.state import AppState
 
@@ -179,7 +182,7 @@ class MainWindow(QMainWindow):
         self._nav.currentRowChanged.connect(self._stack.setCurrentIndex)
         self._nav.setCurrentRow(0)
 
-        layout.addWidget(self._nav)
+        layout.addWidget(sidebar)
         layout.addWidget(self._stack, stretch=1)
         self.setCentralWidget(central)
 
@@ -188,10 +191,152 @@ class MainWindow(QMainWindow):
             self._build_sync_status()
             self._load_access()
 
+    def _apply_light_theme(self) -> None:
+        self.setStyleSheet(
+            """
+            QMainWindow {
+                background: #f5f7fa;
+            }
+            QToolBar, QStatusBar {
+                background: #edf2f7;
+                border: 0;
+                color: #394b5f;
+                spacing: 8px;
+            }
+            QToolBar QLabel, QStatusBar QLabel {
+                color: #394b5f;
+            }
+            QGroupBox {
+                border: 1px solid #d7dee8;
+                border-radius: 6px;
+                margin-top: 12px;
+                padding: 12px 10px 10px 10px;
+                background: #ffffff;
+                color: #263545;
+                font-weight: 600;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 4px;
+            }
+            QPushButton {
+                background: #ffffff;
+                border: 1px solid #c8d2df;
+                border-radius: 5px;
+                color: #243447;
+                min-height: 26px;
+                padding: 5px 12px;
+            }
+            QPushButton:hover {
+                background: #f1f6fb;
+                border-color: #9bb4cf;
+            }
+            QPushButton:pressed {
+                background: #e5eef8;
+            }
+            QPushButton:disabled {
+                background: #eef1f5;
+                color: #8b98a8;
+            }
+            QLineEdit, QComboBox {
+                background: #ffffff;
+                border: 1px solid #c8d2df;
+                border-radius: 5px;
+                color: #203040;
+                min-height: 28px;
+                padding: 3px 8px;
+            }
+            QLineEdit:focus, QComboBox:focus {
+                border-color: #2f80ed;
+            }
+            QTableWidget, QTableView {
+                background: #ffffff;
+                alternate-background-color: #f6f8fb;
+                border: 1px solid #d7dee8;
+                gridline-color: #e1e7ef;
+                selection-background-color: #d9ebff;
+                selection-color: #152638;
+            }
+            QHeaderView::section {
+                background: #edf2f7;
+                border: 0;
+                border-right: 1px solid #d7dee8;
+                border-bottom: 1px solid #d7dee8;
+                color: #394b5f;
+                padding: 6px 8px;
+                font-weight: 600;
+            }
+            """
+        )
+
+    def _build_sidebar(self) -> QWidget:
+        sidebar = QWidget()
+        sidebar.setObjectName("sidebar")
+        sidebar.setFixedWidth(244)
+        sidebar.setStyleSheet(
+            """
+            QWidget#sidebar {
+                background: #202936;
+                color: #e8eef5;
+            }
+            QLabel#brandTitle {
+                color: #ffffff;
+                font-size: 21px;
+                font-weight: 700;
+            }
+            QLabel#brandSubtitle {
+                color: #aebdca;
+                font-size: 12px;
+            }
+            QListWidget#nav {
+                background: transparent;
+                border: 0;
+                color: #dce7f2;
+                outline: 0;
+                padding: 4px 0;
+            }
+            QListWidget#nav::item {
+                padding: 10px 14px;
+                margin: 2px 10px;
+                border-radius: 6px;
+            }
+            QListWidget#nav::item:selected {
+                background: #2f80ed;
+                color: #ffffff;
+            }
+            QListWidget#nav::item:hover:!selected {
+                background: #303d4d;
+            }
+            """
+        )
+        layout = QVBoxLayout(sidebar)
+        layout.setContentsMargins(0, 18, 0, 12)
+        layout.setSpacing(12)
+
+        title = QLabel("ZMetrics")
+        title.setObjectName("brandTitle")
+        title.setContentsMargins(18, 0, 18, 0)
+        layout.addWidget(title)
+
+        subtitle = QLabel("Полевой клиент")
+        subtitle.setObjectName("brandSubtitle")
+        subtitle.setContentsMargins(18, 0, 18, 4)
+        layout.addWidget(subtitle)
+
+        self._nav = QListWidget()
+        self._nav.setObjectName("nav")
+        layout.addWidget(self._nav, stretch=1)
+        return sidebar
+
     def _build_screen(self, nav_label: str, title: str) -> QWidget:
         """Real screen when implemented (needs a context), placeholder otherwise."""
         if self._context is None:
             return _placeholder(title)
+        if nav_label == "Подключение":
+            from zmetrics_desktop.ui.connection import ConnectionScreen
+
+            return ConnectionScreen(self._context, self._state)
         if nav_label == "Дашборд":
             from zmetrics_desktop.ui.dashboard import DashboardScreen
 
@@ -360,7 +505,7 @@ class MainWindow(QMainWindow):
     def _on_login_failed(self, message: str) -> None:
         self._login_action.setEnabled(True)
         self._refresh_auth_ui()
-        QMessageBox.warning(self, "Ошибка входа", message)
+        QMessageBox.warning(self, "Ошибка входа", human_error(message))
 
     def _logout(self) -> None:
         assert self._context is not None
@@ -393,7 +538,7 @@ class MainWindow(QMainWindow):
     def _on_sync_finished(self, report: SyncReport) -> None:
         self._sync_running = False
         if not report.online:
-            text = "⚠ Оффлайн"
+            text = "Сервер недоступен"
             if report.remaining:
                 text += f" · в очереди: {report.remaining}"
         elif report.remaining or report.failed:

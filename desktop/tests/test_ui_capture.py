@@ -104,6 +104,13 @@ def test_user_role_keeps_capture_disabled(qapp, tmp_path):
     assert not screen._capture_button.isEnabled()
 
 
+def test_preview_error_is_human_readable(qapp, tmp_path):
+    screen = CaptureScreen(_context(tmp_path), AppState())
+    screen._on_preview_error("Cannot open camera #0")
+    assert "Нет доступа к камере" in screen._error_label.text()
+    assert "Нет доступа к камере" in screen._status_banner.text()
+
+
 def test_passport_combo_excludes_drafts(qapp, tmp_path):
     screen = CaptureScreen(_context(tmp_path), AppState())
     screen._on_passports([

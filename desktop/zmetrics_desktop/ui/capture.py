@@ -63,6 +63,7 @@ from zmetrics_desktop.offline.capture_upload import (
     build_series_payload,
     perform_capture_upload,
 )
+from zmetrics_desktop.ui.errors import human_error
 from zmetrics_desktop.ui.passports import STATUS_RU, _fmt
 from zmetrics_desktop.ui.state import ROLE_SURVEYOR
 from zmetrics_desktop.ui.workers import submit
@@ -137,9 +138,22 @@ class CaptureScreen(QWidget):
         self._poll_count = 0
 
         root = QVBoxLayout(self)
+        root.setContentsMargins(24, 20, 24, 20)
+        root.setSpacing(12)
+
+        title = QLabel("Съёмка ZED 2")
+        title.setStyleSheet("font-size: 22px; font-weight: 700;")
+        root.addWidget(title)
+
+        self._status_banner = QLabel("Выберите карьер, камеру и паспорт для съёмки.")
+        self._status_banner.setWordWrap(True)
+        root.addWidget(self._status_banner)
+        self._set_status("neutral", "Выберите карьер, камеру и паспорт для съёмки.")
 
         # --- Context selectors -----------------------------------------------------
+        selectors_box = QGroupBox("Контекст съёмки")
         selectors = QFormLayout()
+        selectors_box.setLayout(selectors)
         self._passport_combo = QComboBox()
         selectors.addRow("Паспорт (утв./активный):", self._passport_combo)
         device_row = QHBoxLayout()
@@ -163,9 +177,11 @@ class CaptureScreen(QWidget):
         self._prepare_button.clicked.connect(self._prepare_test_device)
         device_row.addWidget(self._prepare_button)
         selectors.addRow("Устройство / калибровка:", device_row)
-        root.addLayout(selectors)
+        root.addWidget(selectors_box)
 
         # --- Camera + preview --------------------------------------------------------
+        camera_box = QGroupBox("Камера и превью")
+        camera_layout = QVBoxLayout(camera_box)
         camera_row = QHBoxLayout()
         camera_row.addWidget(QLabel("Камера:"))
         self._camera_combo = QComboBox()
@@ -176,16 +192,19 @@ class CaptureScreen(QWidget):
         self._mode_label = QLabel("")
         camera_row.addWidget(self._mode_label)
         camera_row.addStretch(1)
-        root.addLayout(camera_row)
+        camera_layout.addLayout(camera_row)
 
         body = QHBoxLayout()
         self._preview_label = QLabel("Превью выключено")
         self._preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._preview_label.setMinimumSize(480, 300)
-        self._preview_label.setStyleSheet("background: #222; color: #888;")
+        self._preview_label.setStyleSheet(
+            "background: #18202a; color: #9aa8b5; border: 1px solid #2e3a48; border-radius: 6px;"
+        )
         body.addWidget(self._preview_label, stretch=3)
         body.addWidget(self._build_result_panel(), stretch=2)
-        root.addLayout(body, stretch=1)
+        camera_layout.addLayout(body, stretch=1)
+        root.addWidget(camera_box, stretch=1)
 
         # --- Серия снимков (CAP-MULTI): несколько пар кадров в одну сессию -----------
         series_box = QGroupBox("Серия снимков")
@@ -233,7 +252,9 @@ class CaptureScreen(QWidget):
         actions.addWidget(self._capture_button)
         actions.addStretch(1)
         self._error_label = QLabel()
-        self._error_label.setStyleSheet("color: #b00;")
+        self._error_label.setStyleSheet(
+            "padding: 8px 10px; border-radius: 6px; background: #fff1f0; color: #9f2a1d;"
+        )
         self._error_label.setWordWrap(True)
         actions.addWidget(self._error_label, stretch=1)
         root.addLayout(actions)
@@ -282,6 +303,28 @@ class CaptureScreen(QWidget):
             form.addRow(label, value)
         return box
 
+    def _set_status(self, kind: str, text: str) -> None:
+        colors = {
+            "ok": ("#e8f7ed", "#1f6b3a"),
+            "warning": ("#fff6df", "#7b5100"),
+            "error": ("#fff1f0", "#9f2a1d"),
+            "neutral": ("#eef4ff", "#21456b"),
+        }
+        bg, fg = colors.get(kind, colors["neutral"])
+        self._status_banner.setStyleSheet(
+            f"padding: 10px 12px; border-radius: 6px; background: {bg}; color: {fg};"
+        )
+        self._status_banner.setText(text)
+
+    def _show_error(self, message: str) -> None:
+        text = human_error(message)
+        self._error_label.setText(text)
+        if text:
+            self._set_status("error", text)
+
+    def _clear_error(self) -> None:
+        self._error_label.clear()
+
     # --- Loading ----------------------------------------------------------------------
 
     def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 — Qt naming
@@ -298,7 +341,7 @@ class CaptureScreen(QWidget):
         self._stop_preview()  # release the camera when leaving the screen
 
     def refresh(self) -> None:
-        self._error_label.clear()
+        self._clear_error()
         self._load_cameras()
         self._load_devices()
         quarry = self._state.quarry
@@ -313,7 +356,7 @@ class CaptureScreen(QWidget):
             except Exception:  # pygrabber missing / no devices
                 return []
 
-        submit(list_safe, self._on_cameras, self._error_label.setText)
+        submit(list_safe, self._on_cameras, self._show_error)
 
     def _on_cameras(self, cameras: list[CameraInfo]) -> None:
         self._cameras = cameras
@@ -323,18 +366,25 @@ class CaptureScreen(QWidget):
             self._camera_combo.addItem(label, camera.index)
         if not cameras:
             self._camera_combo.addItem("Камеры не найдены", -1)
+            self._set_status(
+                "warning",
+                "Камера не выбрана. Подключите ZED 2 и проверьте доступ к камере в macOS.",
+            )
             return
         # ZED — приоритетный выбор; превью включаем сразу, без лишнего клика
         zed_idx = next((i for i, c in enumerate(cameras) if c.looks_like_zed), None)
         if zed_idx is not None:
             self._camera_combo.setCurrentIndex(zed_idx)
+            self._set_status("neutral", "ZED 2 выбрана, запускаю превью.")
+        else:
+            self._set_status("neutral", "Камера найдена. Для ZED 2 выберите её в списке.")
         self._maybe_autostart_preview()
 
     def _load_passports(self, quarry: Quarry) -> None:
         submit(
             lambda: self._api.list_passports(quarry.id),
             self._on_passports,
-            self._error_label.setText,
+            self._show_error,
         )
 
     def _on_passports(self, passports: list[BlastPassport]) -> None:
@@ -353,7 +403,7 @@ class CaptureScreen(QWidget):
         self._apply_role_gating()
 
     def _load_devices(self) -> None:
-        submit(self._api.list_devices, self._on_devices, self._error_label.setText)
+        submit(self._api.list_devices, self._on_devices, self._show_error)
 
     def _on_devices(self, devices: list[Device]) -> None:
         self._devices = devices
@@ -381,7 +431,7 @@ class CaptureScreen(QWidget):
         submit(
             lambda: self._api.list_calibrations(device.id),
             self._on_calibrations,
-            self._error_label.setText,
+            self._show_error,
         )
 
     def _on_calibrations(self, calibrations: list[Calibration]) -> None:
@@ -425,7 +475,7 @@ class CaptureScreen(QWidget):
         ready = not missing
         self._capture_button.setEnabled(ready)
         if ready:
-            text = "✅ Готово к съёмке — кадр уйдёт на анализ"
+            text = "Готово к съёмке — кадр уйдёт на анализ"
             # Стерео-кадр + тестовое устройство = заглушечная калибровка: реальный
             # CV-контур честно упадёт. Предупреждаем заранее, не блокируя mock-тесты.
             device = self._selected_device()
@@ -436,16 +486,21 @@ class CaptureScreen(QWidget):
                 and device.serial_number.startswith("TEST-")
             ):
                 text += (
-                    " · ⚠ выбрано тестовое устройство — для реального анализа "
+                    " · выбрано тестовое устройство — для реального анализа "
                     "зарегистрируйте ZED (заводская калибровка)"
                 )
             self._ready_label.setText(text)
-            self._ready_label.setStyleSheet("color: #2a7;")
+            self._ready_label.setStyleSheet("color: #1f6b3a;")
+            self._set_status("ok", text)
             self._capture_button.setToolTip("")
         else:
             text = "Для съёмки: " + " · ".join(missing)
             self._ready_label.setText(text)
-            self._ready_label.setStyleSheet("color: #c80;")
+            self._ready_label.setStyleSheet("color: #7b5100;")
+            if self._last_frame is None and not self._series:
+                self._set_status("warning", "Камера не выбрана или превью ещё не запущено.")
+            else:
+                self._set_status("warning", text)
             self._capture_button.setToolTip(text)
 
     def _selected_device(self) -> Device | None:
@@ -462,7 +517,7 @@ class CaptureScreen(QWidget):
             return
         index = self._camera_combo.currentData()
         if index is None or index < 0:
-            self._error_label.setText("Камера не выбрана")
+            self._show_error("Камера не выбрана")
             return
         self._start_preview(index)
 
@@ -479,6 +534,7 @@ class CaptureScreen(QWidget):
         self._preview_worker = worker  # keep alive while running
         QThreadPool.globalInstance().start(worker)
         self._preview_button.setText("Стоп превью")
+        self._set_status("neutral", "Запускаю превью камеры.")
 
     def _stop_preview(self) -> None:
         if self._preview_worker is not None:
@@ -488,15 +544,27 @@ class CaptureScreen(QWidget):
         self._preview_worker = None
         self._preview_button.setText("Старт превью")
         self._preview_label.setText("Превью выключено")
+        if self.isVisible():
+            self._set_status("warning", "Превью остановлено.")
 
     def _on_preview_error(self, message: str) -> None:
-        self._error_label.setText(message)
+        self._show_error(message)
 
     def _on_preview_frame(self, frame: StereoFrame) -> None:
         self._last_frame = frame
         self._mode_label.setText(
             f"стерео SBS, {frame.width}×{frame.height} на глаз" if frame.side_by_side
             else f"моно, {frame.width}×{frame.height} (только left_frame)"
+        )
+        self._clear_error()
+        self._set_status(
+            "neutral",
+            "Камера работает: "
+            + (
+                f"стерео SBS, {frame.width}×{frame.height} на глаз"
+                if frame.side_by_side
+                else f"моно, {frame.width}×{frame.height}"
+            ),
         )
         # The left eye is a slice of the SBS frame (non-contiguous view) and
         # QImage requires a C-contiguous buffer; this also serves as the copy
@@ -520,7 +588,7 @@ class CaptureScreen(QWidget):
     def _add_current_to_series(self) -> None:
         frame = self._last_frame
         if frame is None:
-            self._error_label.setText("Нет кадра превью — запустите камеру")
+            self._show_error("Камера не открыта. Выберите камеру и запустите превью.")
             return
         left = np.ascontiguousarray(frame.left)
         entry = {
@@ -556,7 +624,7 @@ class CaptureScreen(QWidget):
             }
             self._append_series_entry(entry, np.ascontiguousarray(frame.left))
         if errors:
-            self._error_label.setText("Не прочитан файл: " + "; ".join(errors))
+            self._show_error("Не прочитан файл: " + "; ".join(errors))
 
     def _append_series_entry(self, entry: dict, left_bgr: np.ndarray) -> None:
         self._series.append(entry)
@@ -601,10 +669,10 @@ class CaptureScreen(QWidget):
         if quarry is None:
             return
         if not passport_id:
-            self._error_label.setText("Выберите паспорт с зафиксированным взрывом")
+            self._show_error("Выберите паспорт с зафиксированным взрывом")
             return
         if not device_id or not calibration_id:
-            self._error_label.setText(
+            self._show_error(
                 "Нет устройства/калибровки — нажмите «Подготовить тестовое устройство»"
             )
             return
@@ -623,9 +691,10 @@ class CaptureScreen(QWidget):
         else:
             return
 
-        self._error_label.clear()
+        self._clear_error()
         self._capture_button.setEnabled(False)
         self._result_labels["job"].setText("отправка…")
+        self._set_status("neutral", "Отправляю кадры на анализ.")
 
         context = self._context
 
@@ -669,19 +738,21 @@ class CaptureScreen(QWidget):
         self._apply_role_gating()
         if outcome == "queued":
             self._result_labels["job"].setText(
-                "⚠ Оффлайн — съёмка в очереди, отправится автоматически"
+                "Оффлайн — съёмка в очереди, отправится автоматически"
             )
+            self._set_status("warning", "Сервер недоступен: съёмка сохранена в очереди.")
             return
         session_id, job_ids = outcome  # type: ignore[misc]
         self._job_ref = (session_id, list(job_ids))
         self._poll_count = 0
         self._result_labels["job"].setText("в очереди")
+        self._set_status("ok", "Кадры отправлены, анализ поставлен в очередь.")
         self._poll_timer.start()
 
     def _on_send_error(self, message: str) -> None:
         self._apply_role_gating()
         self._result_labels["job"].setText("—")
-        self._error_label.setText(message)
+        self._show_error(message)
 
     # --- Job polling ------------------------------------------------------------------------
 
@@ -732,12 +803,12 @@ class CaptureScreen(QWidget):
         self._load_summary()
 
         if failed and not completed:
-            self._error_label.setText(
+            self._show_error(
                 failed[0].error_message or "Пайплайн завершился с ошибкой"
             )
             return
         if failed:
-            self._error_label.setText(
+            self._show_error(
                 f"Часть кадров завершилась с ошибкой: {len(failed)} из {len(ours)}"
             )
 
@@ -749,7 +820,7 @@ class CaptureScreen(QWidget):
                 for job in ordered
             ]
 
-        submit(fetch_results, self._on_results, self._error_label.setText)
+        submit(fetch_results, self._on_results, self._show_error)
 
     def _on_results(self, indexed: list[tuple[int, AnalysisResult]]) -> None:
         if not indexed:
@@ -767,6 +838,7 @@ class CaptureScreen(QWidget):
             )
             notes = f"{per_frame}\n{notes}"
         labels["notes"].setText(notes)
+        self._set_status("ok", "Анализ завершён, результат обновлён.")
 
     # --- Blast photo list (capture summary) ---------------------------------------------------
 
@@ -785,7 +857,7 @@ class CaptureScreen(QWidget):
                     return []
                 raise
 
-        submit(fetch, self._on_summary, self._error_label.setText)
+        submit(fetch, self._on_summary, self._show_error)
 
     def _on_summary(self, sessions: list[CaptureSessionSummary]) -> None:
         if not sessions:
@@ -835,9 +907,10 @@ class CaptureScreen(QWidget):
             except ZedConfError:
                 pass
 
-        self._error_label.clear()
+        self._clear_error()
         self._register_zed_button.setEnabled(False)
         self._register_zed_button.setText("Скачиваю калибровку…")
+        self._set_status("neutral", "Скачиваю заводскую калибровку ZED.")
 
         def register() -> str:
             payload = build_calibration_payload(
@@ -862,12 +935,13 @@ class CaptureScreen(QWidget):
             self._register_zed_button.setEnabled(True)
             self._register_zed_button.setText("Зарегистрировать ZED")
             self._select_device_serial = str(registered)
+            self._set_status("ok", "ZED зарегистрирована, обновляю список устройств.")
             self._load_devices()
 
         def failed(message: str) -> None:
             self._register_zed_button.setEnabled(True)
             self._register_zed_button.setText("Зарегистрировать ZED")
-            self._error_label.setText(f"Не удалось зарегистрировать ZED: {message}")
+            self._show_error(f"Не удалось зарегистрировать ZED: {message}")
 
         submit(register, done, failed)
 
@@ -905,6 +979,6 @@ class CaptureScreen(QWidget):
 
         def failed(message: str) -> None:
             self._prepare_button.setEnabled(True)
-            self._error_label.setText(message)
+            self._show_error(message)
 
         submit(prepare, done, failed)

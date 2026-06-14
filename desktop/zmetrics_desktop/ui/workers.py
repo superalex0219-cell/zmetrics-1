@@ -15,6 +15,8 @@ from typing import Any
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
 
+from zmetrics_desktop.ui.errors import human_error
+
 # Workers waiting for their queued signal to be processed by the UI thread.
 _active: set[FnWorker] = set()
 
@@ -33,7 +35,7 @@ class FnWorker(QRunnable):
         try:
             result = self._fn()
         except Exception as exc:  # ApiError, httpx errors, validation errors
-            self._emit_safely(self.signals.failed, str(exc))
+            self._emit_safely(self.signals.failed, human_error(str(exc)))
         else:
             self._emit_safely(self.signals.succeeded, result)
 

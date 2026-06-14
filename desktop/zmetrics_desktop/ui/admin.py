@@ -35,6 +35,7 @@ from PySide6.QtWidgets import (
 
 from zmetrics_desktop.api.zmetrics import ZMetricsApi
 from zmetrics_desktop.models import AdminUser, Quarry, UserCreateResult, UserQuarryAccess
+from zmetrics_desktop.ui.errors import human_error
 from zmetrics_desktop.ui.workers import submit
 
 if TYPE_CHECKING:
@@ -42,13 +43,6 @@ if TYPE_CHECKING:
     from zmetrics_desktop.ui.state import AppState
 
 ROLE_NAMES = ["user", "surveyor", "blaster", "admin"]
-
-
-def human_error(message: str) -> str:
-    """403 → «Недостаточно прав», остальное как есть (detail уже без internals)."""
-    if "403" in message:
-        return "Недостаточно прав"
-    return message
 
 
 class UserEditDialog(QDialog):
