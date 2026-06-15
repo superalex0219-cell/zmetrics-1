@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from zmetrics_desktop.offline.sync_processor import SyncReport
 
 from zmetrics_desktop.ui.errors import human_error
-from zmetrics_desktop.ui.layout import apply_form_layout
+from zmetrics_desktop.ui.layout import apply_dialog_theme, apply_form_layout
 
 SYNC_INTERVAL_MS = 30_000  # drain the offline queue every 30 s
 AUTH_CHECK_INTERVAL_MS = 60_000  # проверка срока access-токена раз в минуту
@@ -67,6 +67,7 @@ class _LoginDialog(QDialog):
 
     def __init__(self, parent: QWidget | None = None, username: str = "") -> None:
         super().__init__(parent)
+        apply_dialog_theme(self)
         self.setWindowTitle("Вход в ZMetrics")
         self.setModal(True)
         form = QFormLayout(self)

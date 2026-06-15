@@ -35,6 +35,7 @@ from zmetrics_desktop.api.client import ApiError
 from zmetrics_desktop.api.zmetrics import ZMetricsApi
 from zmetrics_desktop.models import BlastEvent, BlastPassport, Quarry, SiteSection
 from zmetrics_desktop.ui.layout import (
+    apply_dialog_theme,
     apply_form_layout,
     apply_screen_layout,
     configure_combo,
@@ -85,6 +86,7 @@ class PassportCreateDialog(QDialog):
 
     def __init__(self, sections: list[SiteSection], parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        apply_dialog_theme(self)
         self.setWindowTitle("Новый паспорт БВР")
         self._sections = sections
         form = QFormLayout(self)
@@ -121,6 +123,8 @@ class PassportCreateDialog(QDialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("Создать")
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText("Отмена")
         buttons.accepted.connect(self._validate_and_accept)
         buttons.rejected.connect(self.reject)
         form.addRow(buttons)
@@ -157,6 +161,7 @@ class BlastEventDialog(QDialog):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        apply_dialog_theme(self)
         self.setWindowTitle("Зафиксировать взрыв")
         form = QFormLayout(self)
         apply_form_layout(form)
@@ -177,6 +182,8 @@ class BlastEventDialog(QDialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("Сохранить")
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText("Отмена")
         buttons.accepted.connect(self._validate_and_accept)
         buttons.rejected.connect(self.reject)
         form.addRow(buttons)

@@ -37,6 +37,7 @@ from zmetrics_desktop.api.zmetrics import ZMetricsApi
 from zmetrics_desktop.models import AdminUser, Quarry, UserCreateResult, UserQuarryAccess
 from zmetrics_desktop.ui.errors import human_error
 from zmetrics_desktop.ui.layout import (
+    apply_dialog_theme,
     apply_form_layout,
     apply_screen_layout,
     configure_error_label,
@@ -54,6 +55,7 @@ ROLE_NAMES = ["user", "surveyor", "blaster", "admin"]
 class UserEditDialog(QDialog):
     def __init__(self, user: AdminUser, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        apply_dialog_theme(self)
         self.setWindowTitle("Редактировать пользователя")
         form = QFormLayout(self)
         apply_form_layout(form)
@@ -64,6 +66,8 @@ class UserEditDialog(QDialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("Сохранить")
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText("Отмена")
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         form.addRow(buttons)
@@ -82,6 +86,7 @@ class UserEditDialog(QDialog):
 class UserCreateDialog(QDialog):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        apply_dialog_theme(self)
         self.setWindowTitle("Создать пользователя")
         form = QFormLayout(self)
         apply_form_layout(form)
@@ -95,6 +100,8 @@ class UserCreateDialog(QDialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("Создать")
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText("Отмена")
         buttons.accepted.connect(self._validate_and_accept)
         buttons.rejected.connect(self.reject)
         form.addRow(buttons)

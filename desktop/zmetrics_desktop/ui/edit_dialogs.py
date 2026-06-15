@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from zmetrics_desktop.ui.layout import apply_form_layout, configure_error_label
+from zmetrics_desktop.ui.layout import apply_dialog_theme, apply_form_layout, configure_error_label
 from zmetrics_desktop.ui.quarries import optional_float
 
 FieldSpec = tuple[str, str, object, str]  # (key, label, initial, kind)
@@ -32,6 +32,7 @@ class EditFormDialog(QDialog):
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
+        apply_dialog_theme(self)
         self.setWindowTitle(title)
         self.setModal(True)
         self._fields = fields

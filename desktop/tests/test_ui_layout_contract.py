@@ -5,6 +5,7 @@ the app unreadable in narrow macOS windows without requiring a display server.
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 
@@ -23,6 +24,14 @@ def test_forms_use_shared_wrapping_policy() -> None:
         if "QFormLayout(" not in text:
             continue
         assert "apply_form_layout(" in text, path.name
+
+
+def test_dialogs_use_explicit_light_theme() -> None:
+    for path in UI_DIR.glob("*.py"):
+        text = path.read_text(encoding="utf-8")
+        if not re.search(r"class\s+\w+\(QDialog\):", text):
+            continue
+        assert "apply_dialog_theme(self)" in text, path.name
 
 
 def test_error_labels_are_not_packed_into_busy_header_rows() -> None:
