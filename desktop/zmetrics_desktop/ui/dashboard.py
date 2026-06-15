@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 from zmetrics_desktop.api.zmetrics import ZMetricsApi
 from zmetrics_desktop.models import AnalysisResult, Quarry, Report
 from zmetrics_desktop.ui.charts import HistogramWidget
+from zmetrics_desktop.ui.layout import apply_screen_layout, configure_combo, configure_error_label
 from zmetrics_desktop.ui.workers import submit
 
 if TYPE_CHECKING:
@@ -63,32 +64,21 @@ class DashboardScreen(QWidget):
         self._quarries: list[Quarry] = []
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(18, 18, 18, 18)
-        root.setSpacing(14)
+        apply_screen_layout(root)
 
         # Header: quarry selector + refresh
         header = QHBoxLayout()
         header.setSpacing(12)
         header.addWidget(QLabel("Карьер:"))
         self._quarry_combo = QComboBox()
-        self._quarry_combo.setMinimumWidth(160)
-        self._quarry_combo.setSizePolicy(
-            QSizePolicy.Policy.MinimumExpanding,
-            QSizePolicy.Policy.Fixed,
-        )
+        configure_combo(self._quarry_combo)
         self._quarry_combo.currentIndexChanged.connect(self._on_quarry_selected)
         header.addWidget(self._quarry_combo, stretch=1)
         refresh = QPushButton("Обновить")
         refresh.clicked.connect(self.refresh)
         header.addWidget(refresh)
         self._error_label = QLabel()
-        self._error_label.setStyleSheet("color: #b00;")
-        self._error_label.setWordWrap(True)
-        self._error_label.setMinimumWidth(0)
-        self._error_label.setSizePolicy(
-            QSizePolicy.Policy.Ignored,
-            QSizePolicy.Policy.Preferred,
-        )
+        configure_error_label(self._error_label)
         header.addWidget(self._error_label, stretch=2)
         root.addLayout(header)
 

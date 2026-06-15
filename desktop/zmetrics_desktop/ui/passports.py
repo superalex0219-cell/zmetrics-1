@@ -34,6 +34,7 @@ from PySide6.QtWidgets import (
 from zmetrics_desktop.api.client import ApiError
 from zmetrics_desktop.api.zmetrics import ZMetricsApi
 from zmetrics_desktop.models import BlastEvent, BlastPassport, Quarry, SiteSection
+from zmetrics_desktop.ui.layout import apply_screen_layout, configure_combo, configure_error_label
 from zmetrics_desktop.ui.quarries import optional_float
 from zmetrics_desktop.ui.state import ROLE_ADMIN, ROLE_BLASTER
 from zmetrics_desktop.ui.workers import submit
@@ -106,7 +107,7 @@ class PassportCreateDialog(QDialog):
             form.addRow(label, edit)
 
         self._error = QLabel()
-        self._error.setStyleSheet("color: #b00;")
+        configure_error_label(self._error)
         form.addRow(self._error)
 
         buttons = QDialogButtonBox(
@@ -161,7 +162,7 @@ class BlastEventDialog(QDialog):
         form.addRow("Примечания:", self._notes_edit)
 
         self._error = QLabel()
-        self._error.setStyleSheet("color: #b00;")
+        configure_error_label(self._error)
         form.addRow(self._error)
 
         buttons = QDialogButtonBox(
@@ -208,13 +209,14 @@ class PassportsScreen(QWidget):
         self._blast_event: BlastEvent | None = None
 
         root = QVBoxLayout(self)
+        apply_screen_layout(root)
 
         header = QHBoxLayout()
         header.addWidget(QLabel("Карьер:"))
         self._quarry_combo = QComboBox()
-        self._quarry_combo.setMinimumWidth(280)
+        configure_combo(self._quarry_combo)
         self._quarry_combo.currentIndexChanged.connect(self._on_quarry_selected)
-        header.addWidget(self._quarry_combo)
+        header.addWidget(self._quarry_combo, stretch=1)
         refresh = QPushButton("Обновить")
         refresh.clicked.connect(self.refresh)
         header.addWidget(refresh)
@@ -222,10 +224,9 @@ class PassportsScreen(QWidget):
         self._create_button.clicked.connect(self._open_create_dialog)
         self._create_button.setVisible(False)  # fail closed until /access is known
         header.addWidget(self._create_button)
-        header.addStretch(1)
         self._error_label = QLabel()
-        self._error_label.setStyleSheet("color: #b00;")
-        header.addWidget(self._error_label)
+        configure_error_label(self._error_label)
+        header.addWidget(self._error_label, stretch=1)
         root.addLayout(header)
 
         splitter = QSplitter()
@@ -250,6 +251,7 @@ class PassportsScreen(QWidget):
 
     def _build_detail_panel(self) -> QWidget:
         panel = QWidget()
+        panel.setMinimumWidth(0)
         layout = QVBoxLayout(panel)
 
         self._detail_box = QGroupBox("Паспорт")
@@ -303,8 +305,7 @@ class PassportsScreen(QWidget):
         buttons.addStretch(1)
 
         self._action_error = QLabel()
-        self._action_error.setStyleSheet("color: #b00;")
-        self._action_error.setWordWrap(True)
+        configure_error_label(self._action_error)
 
         layout.addWidget(self._detail_box)
         layout.addLayout(buttons)

@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
 
 from zmetrics_desktop.api.zmetrics import ZMetricsApi
 from zmetrics_desktop.models import Quarry, Recommendation, Report
+from zmetrics_desktop.ui.layout import apply_screen_layout, configure_combo, configure_error_label
 from zmetrics_desktop.ui.state import ROLE_BLASTER
 from zmetrics_desktop.ui.workers import submit
 
@@ -90,24 +91,25 @@ class RecommendationsScreen(QWidget):
         self._selected: Recommendation | None = None
 
         root = QVBoxLayout(self)
+        apply_screen_layout(root)
 
         header = QHBoxLayout()
         header.addWidget(QLabel("Карьер:"))
         self._quarry_combo = QComboBox()
-        self._quarry_combo.setMinimumWidth(220)
+        configure_combo(self._quarry_combo, 140)
         self._quarry_combo.currentIndexChanged.connect(self._on_quarry_selected)
-        header.addWidget(self._quarry_combo)
+        header.addWidget(self._quarry_combo, stretch=1)
         header.addWidget(QLabel("Отчёт:"))
         self._report_combo = QComboBox()
-        self._report_combo.setMinimumWidth(280)
+        configure_combo(self._report_combo, 180)
         self._report_combo.currentIndexChanged.connect(self._on_report_selected)
         header.addWidget(self._report_combo, stretch=1)
         refresh = QPushButton("Обновить")
         refresh.clicked.connect(self.refresh)
         header.addWidget(refresh)
         self._error_label = QLabel()
-        self._error_label.setStyleSheet("color: #b00;")
-        header.addWidget(self._error_label)
+        configure_error_label(self._error_label)
+        header.addWidget(self._error_label, stretch=1)
         root.addLayout(header)
 
         splitter = QSplitter()
@@ -129,6 +131,7 @@ class RecommendationsScreen(QWidget):
 
     def _build_detail_panel(self) -> QWidget:
         panel = QWidget()
+        panel.setMinimumWidth(0)
         layout = QVBoxLayout(panel)
 
         self._status_label = QLabel("—")
@@ -140,7 +143,9 @@ class RecommendationsScreen(QWidget):
         self._text_view.setReadOnly(True)
         layout.addWidget(self._text_view, stretch=2)
 
-        layout.addWidget(QLabel("Предлагаемые параметры (справочно — не применяются автоматически):"))
+        params_title = QLabel("Предлагаемые параметры (справочно — не применяются автоматически):")
+        params_title.setWordWrap(True)
+        layout.addWidget(params_title)
         self._params_view = QTextEdit()
         self._params_view.setReadOnly(True)
         layout.addWidget(self._params_view, stretch=1)
@@ -169,8 +174,7 @@ class RecommendationsScreen(QWidget):
         layout.addLayout(buttons)
 
         self._action_error = QLabel()
-        self._action_error.setStyleSheet("color: #b00;")
-        self._action_error.setWordWrap(True)
+        configure_error_label(self._action_error)
         layout.addWidget(self._action_error)
         return panel
 

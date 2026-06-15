@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from zmetrics_desktop.ui.layout import configure_error_label
 from zmetrics_desktop.ui.quarries import optional_float
 
 FieldSpec = tuple[str, str, object, str]  # (key, label, initial, kind)
@@ -49,7 +50,7 @@ class EditFormDialog(QDialog):
             form.addRow(label, edit)
 
         self._error = QLabel()
-        self._error.setStyleSheet("color: #b00;")
+        configure_error_label(self._error)
         form.addRow(self._error)
 
         buttons = QDialogButtonBox(

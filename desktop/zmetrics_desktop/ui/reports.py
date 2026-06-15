@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
 from zmetrics_desktop.api.zmetrics import ZMetricsApi
 from zmetrics_desktop.models import AnalysisResult, Quarry, Report
 from zmetrics_desktop.ui.charts import HistogramWidget
+from zmetrics_desktop.ui.layout import apply_screen_layout, configure_combo, configure_error_label
 from zmetrics_desktop.ui.passports import _fmt
 from zmetrics_desktop.ui.state import ROLE_BLASTER
 from zmetrics_desktop.ui.workers import submit
@@ -49,20 +50,20 @@ class ReportsScreen(QWidget):
         self._selected: Report | None = None
 
         root = QVBoxLayout(self)
+        apply_screen_layout(root)
 
         header = QHBoxLayout()
         header.addWidget(QLabel("Карьер:"))
         self._quarry_combo = QComboBox()
-        self._quarry_combo.setMinimumWidth(280)
+        configure_combo(self._quarry_combo)
         self._quarry_combo.currentIndexChanged.connect(self._on_quarry_selected)
-        header.addWidget(self._quarry_combo)
+        header.addWidget(self._quarry_combo, stretch=1)
         refresh = QPushButton("Обновить")
         refresh.clicked.connect(self.refresh)
         header.addWidget(refresh)
-        header.addStretch(1)
         self._error_label = QLabel()
-        self._error_label.setStyleSheet("color: #b00;")
-        header.addWidget(self._error_label)
+        configure_error_label(self._error_label)
+        header.addWidget(self._error_label, stretch=1)
         root.addLayout(header)
 
         splitter = QSplitter()
@@ -85,11 +86,14 @@ class ReportsScreen(QWidget):
 
     def _build_detail_panel(self) -> QWidget:
         panel = QWidget()
+        panel.setMinimumWidth(0)
         layout = QVBoxLayout(panel)
 
         # Метод анализа — крупно и заметно (правило безопасности: mock помечается всегда)
         self._method_badge = QLabel("")
         self._method_badge.setStyleSheet("font-size: 16px; font-weight: 700; padding: 4px;")
+        self._method_badge.setWordWrap(True)
+        self._method_badge.setMinimumWidth(0)
         layout.addWidget(self._method_badge)
 
         box = QGroupBox("Результат анализа")
@@ -113,6 +117,7 @@ class ReportsScreen(QWidget):
         layout.addWidget(box)
 
         self._histogram = HistogramWidget()
+        self._histogram.setMinimumWidth(0)
         layout.addWidget(self._histogram, stretch=1)
 
         self._format_label = QLabel("Формат:")

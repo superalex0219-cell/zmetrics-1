@@ -29,6 +29,7 @@ from PySide6.QtWidgets import QDialog
 
 from zmetrics_desktop.api.zmetrics import ZMetricsApi
 from zmetrics_desktop.models import Quarry
+from zmetrics_desktop.ui.layout import apply_screen_layout, configure_error_label
 from zmetrics_desktop.ui.state import ROLE_ADMIN
 from zmetrics_desktop.ui.workers import submit
 
@@ -60,6 +61,7 @@ class QuarriesScreen(QWidget):
         self._quarries: list[Quarry] = []
 
         root = QVBoxLayout(self)
+        apply_screen_layout(root)
 
         header = QHBoxLayout()
         refresh = QPushButton("Обновить")
@@ -69,10 +71,9 @@ class QuarriesScreen(QWidget):
         self._edit_button.setVisible(False)  # fail closed: нужна роль admin на карьере
         self._edit_button.clicked.connect(self._open_edit_dialog)
         header.addWidget(self._edit_button)
-        header.addStretch(1)
         self._error_label = QLabel()
-        self._error_label.setStyleSheet("color: #b00;")
-        header.addWidget(self._error_label)
+        configure_error_label(self._error_label)
+        header.addWidget(self._error_label, stretch=1)
         root.addLayout(header)
 
         state.access_changed.connect(self._update_edit_button)
@@ -106,10 +107,9 @@ class QuarriesScreen(QWidget):
         self._create_button = QPushButton("Создать")
         self._create_button.clicked.connect(self._create)
         buttons.addWidget(self._create_button)
-        buttons.addStretch(1)
         self._form_error = QLabel()
-        self._form_error.setStyleSheet("color: #b00;")
-        buttons.addWidget(self._form_error)
+        configure_error_label(self._form_error)
+        buttons.addWidget(self._form_error, stretch=1)
         form.addRow(buttons)
         return box
 

@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
     QFormLayout,
+    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QInputDialog,
@@ -157,27 +158,32 @@ class CaptureScreen(QWidget):
         selectors_box.setLayout(selectors)
         self._passport_combo = QComboBox()
         selectors.addRow("Паспорт (утв./активный):", self._passport_combo)
+        device_block = QVBoxLayout()
         device_row = QHBoxLayout()
         self._device_combo = QComboBox()
         self._device_combo.currentIndexChanged.connect(self._on_device_selected)
         device_row.addWidget(self._device_combo, stretch=1)
         self._calibration_combo = QComboBox()
         device_row.addWidget(self._calibration_combo, stretch=1)
+        device_block.addLayout(device_row)
+        device_actions = QHBoxLayout()
         self._register_zed_button = QPushButton("Зарегистрировать ZED")
         self._register_zed_button.setToolTip(
             "Скачивает заводскую калибровку с calib.stereolabs.com по серийному\n"
             "номеру (на наклейке камеры) и регистрирует устройство + калибровку."
         )
         self._register_zed_button.clicked.connect(self._register_zed)
-        device_row.addWidget(self._register_zed_button)
+        device_actions.addWidget(self._register_zed_button)
         self._prepare_button = QPushButton("Подготовить тестовое устройство")
         self._prepare_button.setToolTip(
             "Регистрирует выбранную камеру как Device и создаёт калибровку-заглушку.\n"
             "Только для тестов без ZED 2 — реальное стерео с ней не считается."
         )
         self._prepare_button.clicked.connect(self._prepare_test_device)
-        device_row.addWidget(self._prepare_button)
-        selectors.addRow("Устройство / калибровка:", device_row)
+        device_actions.addWidget(self._prepare_button)
+        device_actions.addStretch(1)
+        device_block.addLayout(device_actions)
+        selectors.addRow("Устройство / калибровка:", device_block)
         root.addWidget(selectors_box)
 
         # --- Camera + preview --------------------------------------------------------
@@ -198,7 +204,7 @@ class CaptureScreen(QWidget):
         body = QHBoxLayout()
         self._preview_label = QLabel("Превью выключено")
         self._preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._preview_label.setMinimumSize(480, 300)
+        self._preview_label.setMinimumSize(320, 200)
         self._preview_label.setStyleSheet(
             "background: #18202a; color: #9aa8b5; border: 1px solid #2e3a48; border-radius: 6px;"
         )
@@ -210,27 +216,28 @@ class CaptureScreen(QWidget):
         # --- Серия снимков (CAP-MULTI): несколько пар кадров в одну сессию -----------
         series_box = QGroupBox("Серия снимков")
         series_layout = QVBoxLayout(series_box)
-        series_buttons = QHBoxLayout()
+        series_buttons = QGridLayout()
         self._add_shot_button = QPushButton("Снять ещё (в серию)")
         self._add_shot_button.setToolTip(
             "Добавляет текущий кадр превью в серию — все кадры серии уйдут\n"
             "одной сессией, на каждую пару будет свой анализ."
         )
         self._add_shot_button.clicked.connect(self._add_current_to_series)
-        series_buttons.addWidget(self._add_shot_button)
+        series_buttons.addWidget(self._add_shot_button, 0, 0)
         self._load_disk_button = QPushButton("Загрузить с диска…")
         self._load_disk_button.setToolTip(
             "JPEG/PNG с диска; широкие кадры (SBS) автоматически делятся на left/right."
         )
         self._load_disk_button.clicked.connect(self._load_from_disk)
-        series_buttons.addWidget(self._load_disk_button)
+        series_buttons.addWidget(self._load_disk_button, 0, 1)
         self._remove_shot_button = QPushButton("Удалить выбранный")
         self._remove_shot_button.clicked.connect(self._remove_selected_shot)
-        series_buttons.addWidget(self._remove_shot_button)
+        series_buttons.addWidget(self._remove_shot_button, 1, 0)
         self._clear_series_button = QPushButton("Очистить серию")
         self._clear_series_button.clicked.connect(self._clear_series)
-        series_buttons.addWidget(self._clear_series_button)
-        series_buttons.addStretch(1)
+        series_buttons.addWidget(self._clear_series_button, 1, 1)
+        series_buttons.setColumnStretch(0, 1)
+        series_buttons.setColumnStretch(1, 1)
         series_layout.addLayout(series_buttons)
         self._series_list = QListWidget()
         self._series_list.setViewMode(QListWidget.ViewMode.IconMode)

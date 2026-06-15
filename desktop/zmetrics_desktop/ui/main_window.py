@@ -269,7 +269,7 @@ class MainWindow(QMainWindow):
                 background: #eef1f5;
                 color: #8b98a8;
             }
-            QLineEdit, QComboBox {
+            QLineEdit, QComboBox, QTextEdit, QPlainTextEdit {
                 background: #ffffff;
                 border: 1px solid #c8d2df;
                 border-radius: 5px;
@@ -277,7 +277,11 @@ class MainWindow(QMainWindow):
                 min-height: 28px;
                 padding: 3px 8px;
             }
-            QLineEdit:focus, QComboBox:focus {
+            QTextEdit, QPlainTextEdit {
+                selection-background-color: #d9ebff;
+                selection-color: #152638;
+            }
+            QLineEdit:focus, QComboBox:focus, QTextEdit:focus, QPlainTextEdit:focus {
                 border-color: #2f80ed;
             }
             QTableWidget, QTableView {
@@ -314,7 +318,7 @@ class MainWindow(QMainWindow):
     def _build_sidebar(self) -> QWidget:
         sidebar = QWidget()
         sidebar.setObjectName("sidebar")
-        sidebar.setFixedWidth(244)
+        sidebar.setFixedWidth(220)
         sidebar.setStyleSheet(
             """
             QWidget#sidebar {

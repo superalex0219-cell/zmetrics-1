@@ -36,6 +36,7 @@ from PySide6.QtWidgets import (
 from zmetrics_desktop.api.zmetrics import ZMetricsApi
 from zmetrics_desktop.models import AdminUser, Quarry, UserCreateResult, UserQuarryAccess
 from zmetrics_desktop.ui.errors import human_error
+from zmetrics_desktop.ui.layout import apply_screen_layout, configure_error_label
 from zmetrics_desktop.ui.workers import submit
 
 if TYPE_CHECKING:
@@ -82,7 +83,7 @@ class UserCreateDialog(QDialog):
         form.addRow("Email*:", self._email)
         form.addRow("ФИО*:", self._full_name)
         self._error = QLabel()
-        self._error.setStyleSheet("color: #b00;")
+        configure_error_label(self._error)
         form.addRow(self._error)
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
@@ -119,6 +120,7 @@ class AdminScreen(QWidget):
         self._selected: AdminUser | None = None
 
         root = QVBoxLayout(self)
+        apply_screen_layout(root)
 
         header = QHBoxLayout()
         refresh = QPushButton("Обновить")
@@ -127,10 +129,8 @@ class AdminScreen(QWidget):
         self._create_button = QPushButton("Создать пользователя…")
         self._create_button.clicked.connect(self._open_create_dialog)
         header.addWidget(self._create_button)
-        header.addStretch(1)
         self._error_label = QLabel()
-        self._error_label.setStyleSheet("color: #b00;")
-        self._error_label.setWordWrap(True)
+        configure_error_label(self._error_label)
         header.addWidget(self._error_label, stretch=1)
         root.addLayout(header)
 
@@ -160,6 +160,7 @@ class AdminScreen(QWidget):
         splitter = QSplitter()
 
         users_panel = QWidget()
+        users_panel.setMinimumWidth(0)
         users_layout = QVBoxLayout(users_panel)
         users_layout.addWidget(QLabel("Пользователи"))
         self._table = QTableWidget(0, 4)
@@ -192,6 +193,7 @@ class AdminScreen(QWidget):
 
     def _build_roles_panel(self) -> QWidget:
         panel = QGroupBox("Роли выбранного пользователя")
+        panel.setMinimumWidth(0)
         layout = QVBoxLayout(panel)
 
         self._access_table = QTableWidget(0, 2)
