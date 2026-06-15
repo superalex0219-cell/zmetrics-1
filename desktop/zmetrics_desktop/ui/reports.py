@@ -29,7 +29,13 @@ from PySide6.QtWidgets import (
 from zmetrics_desktop.api.zmetrics import ZMetricsApi
 from zmetrics_desktop.models import AnalysisResult, Quarry, Report
 from zmetrics_desktop.ui.charts import HistogramWidget
-from zmetrics_desktop.ui.layout import apply_screen_layout, configure_combo, configure_error_label
+from zmetrics_desktop.ui.layout import (
+    apply_form_layout,
+    apply_screen_layout,
+    configure_combo,
+    configure_error_label,
+    configure_wrapping_label,
+)
 from zmetrics_desktop.ui.passports import _fmt
 from zmetrics_desktop.ui.state import ROLE_BLASTER
 from zmetrics_desktop.ui.workers import submit
@@ -61,10 +67,12 @@ class ReportsScreen(QWidget):
         refresh = QPushButton("Обновить")
         refresh.clicked.connect(self.refresh)
         header.addWidget(refresh)
+        header.addStretch(1)
+        root.addLayout(header)
+
         self._error_label = QLabel()
         configure_error_label(self._error_label)
-        header.addWidget(self._error_label, stretch=1)
-        root.addLayout(header)
+        root.addWidget(self._error_label)
 
         splitter = QSplitter()
         self._table = QTableWidget(0, 4)
@@ -92,12 +100,12 @@ class ReportsScreen(QWidget):
         # Метод анализа — крупно и заметно (правило безопасности: mock помечается всегда)
         self._method_badge = QLabel("")
         self._method_badge.setStyleSheet("font-size: 16px; font-weight: 700; padding: 4px;")
-        self._method_badge.setWordWrap(True)
-        self._method_badge.setMinimumWidth(0)
+        configure_wrapping_label(self._method_badge)
         layout.addWidget(self._method_badge)
 
         box = QGroupBox("Результат анализа")
         form = QFormLayout(box)
+        apply_form_layout(form)
         self._detail_labels: dict[str, QLabel] = {}
         for key, label in [
             ("p10", "P10:"),
@@ -111,7 +119,7 @@ class ReportsScreen(QWidget):
             ("model", "Версия модели:"),
         ]:
             value = QLabel("—")
-            value.setWordWrap(True)
+            configure_wrapping_label(value)
             self._detail_labels[key] = value
             form.addRow(label, value)
         layout.addWidget(box)

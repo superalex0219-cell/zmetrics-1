@@ -30,7 +30,12 @@ from PySide6.QtWidgets import (
 
 from zmetrics_desktop.api.zmetrics import ZMetricsApi
 from zmetrics_desktop.models import Quarry, Recommendation, Report
-from zmetrics_desktop.ui.layout import apply_screen_layout, configure_combo, configure_error_label
+from zmetrics_desktop.ui.layout import (
+    apply_screen_layout,
+    configure_combo,
+    configure_error_label,
+    configure_wrapping_label,
+)
 from zmetrics_desktop.ui.state import ROLE_BLASTER
 from zmetrics_desktop.ui.workers import submit
 
@@ -107,10 +112,12 @@ class RecommendationsScreen(QWidget):
         refresh = QPushButton("Обновить")
         refresh.clicked.connect(self.refresh)
         header.addWidget(refresh)
+        header.addStretch(1)
+        root.addLayout(header)
+
         self._error_label = QLabel()
         configure_error_label(self._error_label)
-        header.addWidget(self._error_label, stretch=1)
-        root.addLayout(header)
+        root.addWidget(self._error_label)
 
         splitter = QSplitter()
         self._table = QTableWidget(0, 3)
@@ -136,6 +143,7 @@ class RecommendationsScreen(QWidget):
 
         self._status_label = QLabel("—")
         self._status_label.setStyleSheet("font-size: 15px; font-weight: 700; padding: 2px;")
+        configure_wrapping_label(self._status_label)
         layout.addWidget(self._status_label)
 
         layout.addWidget(QLabel("Обоснование:"))
@@ -144,14 +152,14 @@ class RecommendationsScreen(QWidget):
         layout.addWidget(self._text_view, stretch=2)
 
         params_title = QLabel("Предлагаемые параметры (справочно — не применяются автоматически):")
-        params_title.setWordWrap(True)
+        configure_wrapping_label(params_title)
         layout.addWidget(params_title)
         self._params_view = QTextEdit()
         self._params_view.setReadOnly(True)
         layout.addWidget(self._params_view, stretch=1)
 
         self._review_info = QLabel("")
-        self._review_info.setWordWrap(True)
+        configure_wrapping_label(self._review_info)
         layout.addWidget(self._review_info)
 
         notes_row = QHBoxLayout()

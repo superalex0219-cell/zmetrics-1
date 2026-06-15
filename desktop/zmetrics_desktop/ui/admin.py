@@ -36,7 +36,12 @@ from PySide6.QtWidgets import (
 from zmetrics_desktop.api.zmetrics import ZMetricsApi
 from zmetrics_desktop.models import AdminUser, Quarry, UserCreateResult, UserQuarryAccess
 from zmetrics_desktop.ui.errors import human_error
-from zmetrics_desktop.ui.layout import apply_screen_layout, configure_error_label
+from zmetrics_desktop.ui.layout import (
+    apply_form_layout,
+    apply_screen_layout,
+    configure_error_label,
+    configure_wrapping_label,
+)
 from zmetrics_desktop.ui.workers import submit
 
 if TYPE_CHECKING:
@@ -51,6 +56,7 @@ class UserEditDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Редактировать пользователя")
         form = QFormLayout(self)
+        apply_form_layout(form)
         self._full_name = QLineEdit(user.full_name)
         self._email = QLineEdit(user.email)
         form.addRow("ФИО:", self._full_name)
@@ -78,6 +84,7 @@ class UserCreateDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Создать пользователя")
         form = QFormLayout(self)
+        apply_form_layout(form)
         self._email = QLineEdit()
         self._full_name = QLineEdit()
         form.addRow("Email*:", self._email)
@@ -129,23 +136,25 @@ class AdminScreen(QWidget):
         self._create_button = QPushButton("Создать пользователя…")
         self._create_button.clicked.connect(self._open_create_dialog)
         header.addWidget(self._create_button)
+        header.addStretch(1)
+        root.addLayout(header)
+
         self._error_label = QLabel()
         configure_error_label(self._error_label)
-        header.addWidget(self._error_label, stretch=1)
-        root.addLayout(header)
+        root.addWidget(self._error_label)
 
         # Temp-password box: только в памяти экрана, «Скрыть» очищает.
         self._password_box = QFrame()
         self._password_box.setFrameShape(QFrame.Shape.StyledPanel)
         self._password_box.setStyleSheet(
-            "QFrame { background: #4a3a00; border: 1px solid #b06000; border-radius: 4px; }"
+            "QFrame { background: #fff6df; border: 1px solid #e0b34f; border-radius: 6px; }"
         )
         box_layout = QHBoxLayout(self._password_box)
         self._password_label = QLabel()
         # PlainText — пароль никогда не интерпретируется как разметка
         self._password_label.setTextFormat(Qt.TextFormat.PlainText)
-        self._password_label.setStyleSheet("font-family: Consolas, monospace; color: #ffd54f;")
-        self._password_label.setWordWrap(True)
+        self._password_label.setStyleSheet("font-family: Consolas, monospace; color: #5f4300;")
+        configure_wrapping_label(self._password_label)
         box_layout.addWidget(self._password_label, stretch=1)
         copy_button = QPushButton("Копировать")
         copy_button.clicked.connect(self._copy_password)
@@ -220,6 +229,7 @@ class AdminScreen(QWidget):
 
         grant_box = QGroupBox("Назначить роль")
         grant_form = QFormLayout(grant_box)
+        apply_form_layout(grant_form)
         self._grant_quarry_combo = QComboBox()
         self._grant_role_combo = QComboBox()
         self._grant_role_combo.addItems(ROLE_NAMES)

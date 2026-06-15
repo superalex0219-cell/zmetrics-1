@@ -65,6 +65,13 @@ from zmetrics_desktop.offline.capture_upload import (
     perform_capture_upload,
 )
 from zmetrics_desktop.ui.errors import human_error
+from zmetrics_desktop.ui.layout import (
+    apply_form_layout,
+    apply_screen_layout,
+    configure_combo,
+    configure_error_label,
+    configure_wrapping_label,
+)
 from zmetrics_desktop.ui.passports import STATUS_RU, _fmt
 from zmetrics_desktop.ui.state import ROLE_SURVEYOR
 from zmetrics_desktop.ui.workers import submit
@@ -140,30 +147,33 @@ class CaptureScreen(QWidget):
         self._poll_count = 0
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(24, 20, 24, 20)
-        root.setSpacing(12)
+        apply_screen_layout(root)
 
         title = QLabel("Съёмка ZED 2")
         title.setStyleSheet("font-size: 22px; font-weight: 700;")
         root.addWidget(title)
 
         self._status_banner = QLabel("Выберите карьер, камеру и паспорт для съёмки.")
-        self._status_banner.setWordWrap(True)
+        configure_wrapping_label(self._status_banner)
         root.addWidget(self._status_banner)
         self._set_status("neutral", "Выберите карьер, камеру и паспорт для съёмки.")
 
         # --- Context selectors -----------------------------------------------------
         selectors_box = QGroupBox("Контекст съёмки")
         selectors = QFormLayout()
+        apply_form_layout(selectors)
         selectors_box.setLayout(selectors)
         self._passport_combo = QComboBox()
+        configure_combo(self._passport_combo)
         selectors.addRow("Паспорт (утв./активный):", self._passport_combo)
         device_block = QVBoxLayout()
         device_row = QHBoxLayout()
         self._device_combo = QComboBox()
+        configure_combo(self._device_combo, 140)
         self._device_combo.currentIndexChanged.connect(self._on_device_selected)
         device_row.addWidget(self._device_combo, stretch=1)
         self._calibration_combo = QComboBox()
+        configure_combo(self._calibration_combo, 140)
         device_row.addWidget(self._calibration_combo, stretch=1)
         device_block.addLayout(device_row)
         device_actions = QHBoxLayout()
@@ -192,13 +202,14 @@ class CaptureScreen(QWidget):
         camera_row = QHBoxLayout()
         camera_row.addWidget(QLabel("Камера:"))
         self._camera_combo = QComboBox()
+        configure_combo(self._camera_combo)
         camera_row.addWidget(self._camera_combo, stretch=1)
         self._preview_button = QPushButton("Старт превью")
         self._preview_button.clicked.connect(self._toggle_preview)
         camera_row.addWidget(self._preview_button)
         self._mode_label = QLabel("")
-        camera_row.addWidget(self._mode_label)
-        camera_row.addStretch(1)
+        configure_wrapping_label(self._mode_label)
+        camera_row.addWidget(self._mode_label, stretch=1)
         camera_layout.addLayout(camera_row)
 
         body = QHBoxLayout()
@@ -250,7 +261,7 @@ class CaptureScreen(QWidget):
 
         # Чек-лист готовности: что ещё нужно сделать, чтобы кнопка съёмки ожила
         self._ready_label = QLabel("")
-        self._ready_label.setWordWrap(True)
+        configure_wrapping_label(self._ready_label)
         root.addWidget(self._ready_label)
 
         actions = QHBoxLayout()
@@ -259,13 +270,11 @@ class CaptureScreen(QWidget):
         self._capture_button.clicked.connect(self._capture_and_send)
         actions.addWidget(self._capture_button)
         actions.addStretch(1)
-        self._error_label = QLabel()
-        self._error_label.setStyleSheet(
-            "padding: 8px 10px; border-radius: 6px; background: #fff1f0; color: #9f2a1d;"
-        )
-        self._error_label.setWordWrap(True)
-        actions.addWidget(self._error_label, stretch=1)
         root.addLayout(actions)
+
+        self._error_label = QLabel()
+        configure_error_label(self._error_label)
+        root.addWidget(self._error_label)
 
         # --- Снимки взрыва: сессии выбранного паспорта с агрегатами ------------------
         summary_box = QGroupBox("Снимки взрыва")
@@ -277,7 +286,7 @@ class CaptureScreen(QWidget):
         summary_header.addStretch(1)
         summary_layout.addLayout(summary_header)
         self._summary_label = QLabel("—")
-        self._summary_label.setWordWrap(True)
+        configure_wrapping_label(self._summary_label)
         self._summary_label.setTextFormat(Qt.TextFormat.RichText)
         summary_layout.addWidget(self._summary_label)
         root.addWidget(summary_box)
@@ -296,6 +305,7 @@ class CaptureScreen(QWidget):
     def _build_result_panel(self) -> QWidget:
         box = QGroupBox("Анализ")
         form = QFormLayout(box)
+        apply_form_layout(form)
         self._result_labels: dict[str, QLabel] = {}
         for key, label in [
             ("job", "Задача:"),
@@ -306,7 +316,7 @@ class CaptureScreen(QWidget):
             ("notes", "Примечания:"),
         ]:
             value = QLabel("—")
-            value.setWordWrap(True)
+            configure_wrapping_label(value)
             self._result_labels[key] = value
             form.addRow(label, value)
         return box

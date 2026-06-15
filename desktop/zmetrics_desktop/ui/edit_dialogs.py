@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from zmetrics_desktop.ui.layout import configure_error_label
+from zmetrics_desktop.ui.layout import apply_form_layout, configure_error_label
 from zmetrics_desktop.ui.quarries import optional_float
 
 FieldSpec = tuple[str, str, object, str]  # (key, label, initial, kind)
@@ -40,6 +40,7 @@ class EditFormDialog(QDialog):
         self.changes: dict | None = None
 
         form = QFormLayout(self)
+        apply_form_layout(form)
         for key, label, initial, _kind in fields:
             text = "" if initial is None else (
                 f"{initial:g}" if isinstance(initial, float) else str(initial)

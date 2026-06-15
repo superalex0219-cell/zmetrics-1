@@ -19,6 +19,11 @@ from PySide6.QtWidgets import (
 
 from zmetrics_desktop.config import save_user_server_settings, user_env_path
 from zmetrics_desktop.ui.errors import human_error
+from zmetrics_desktop.ui.layout import (
+    apply_form_layout,
+    apply_screen_layout,
+    configure_wrapping_label,
+)
 from zmetrics_desktop.ui.workers import submit
 
 if TYPE_CHECKING:
@@ -33,8 +38,7 @@ class ConnectionScreen(QWidget):
         self._state = state
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(24, 20, 24, 20)
-        root.setSpacing(14)
+        apply_screen_layout(root)
 
         title = QLabel("Подключение к серверу")
         title.setObjectName("pageTitle")
@@ -45,13 +49,13 @@ class ConnectionScreen(QWidget):
             "Адреса сохраняются в пользовательские настройки приложения. "
             "После сохранения перезапустите ZMetrics, чтобы все экраны и вход использовали новый сервер."
         )
-        intro.setWordWrap(True)
+        configure_wrapping_label(intro)
         intro.setStyleSheet("color: #52616f;")
         root.addWidget(intro)
 
         box = QGroupBox("Сервер")
         form = QFormLayout(box)
-        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+        apply_form_layout(form)
         self._backend_url = QLineEdit(context.settings.backend_base_url)
         self._backend_url.setPlaceholderText("http://192.168.0.10:8000")
         self._keycloak_url = QLineEdit(context.settings.keycloak_base_url)
@@ -77,7 +81,7 @@ class ConnectionScreen(QWidget):
         root.addLayout(actions)
 
         self._status = QLabel()
-        self._status.setWordWrap(True)
+        configure_wrapping_label(self._status)
         self._status.setTextFormat(Qt.TextFormat.PlainText)
         self._status.setStyleSheet(
             "padding: 10px 12px; border-radius: 6px; background: #eef4ff; color: #21456b;"

@@ -34,7 +34,13 @@ from PySide6.QtWidgets import (
 from zmetrics_desktop.api.client import ApiError
 from zmetrics_desktop.api.zmetrics import ZMetricsApi
 from zmetrics_desktop.models import BlastEvent, BlastPassport, Quarry, SiteSection
-from zmetrics_desktop.ui.layout import apply_screen_layout, configure_combo, configure_error_label
+from zmetrics_desktop.ui.layout import (
+    apply_form_layout,
+    apply_screen_layout,
+    configure_combo,
+    configure_error_label,
+    configure_wrapping_label,
+)
 from zmetrics_desktop.ui.quarries import optional_float
 from zmetrics_desktop.ui.state import ROLE_ADMIN, ROLE_BLASTER
 from zmetrics_desktop.ui.workers import submit
@@ -82,8 +88,10 @@ class PassportCreateDialog(QDialog):
         self.setWindowTitle("Новый паспорт БВР")
         self._sections = sections
         form = QFormLayout(self)
+        apply_form_layout(form)
 
         self._section_combo = QComboBox()
+        configure_combo(self._section_combo)
         for section in sections:
             self._section_combo.addItem(section.name, section.id)
         form.addRow("Участок*:", self._section_combo)
@@ -151,6 +159,7 @@ class BlastEventDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Зафиксировать взрыв")
         form = QFormLayout(self)
+        apply_form_layout(form)
 
         self._datetime_edit = QLineEdit(datetime.now().isoformat(timespec="minutes"))
         self._explosive_edit = QLineEdit()
@@ -224,10 +233,12 @@ class PassportsScreen(QWidget):
         self._create_button.clicked.connect(self._open_create_dialog)
         self._create_button.setVisible(False)  # fail closed until /access is known
         header.addWidget(self._create_button)
+        header.addStretch(1)
+        root.addLayout(header)
+
         self._error_label = QLabel()
         configure_error_label(self._error_label)
-        header.addWidget(self._error_label, stretch=1)
-        root.addLayout(header)
+        root.addWidget(self._error_label)
 
         splitter = QSplitter()
         self._table = QTableWidget(0, 5)
@@ -256,6 +267,7 @@ class PassportsScreen(QWidget):
 
         self._detail_box = QGroupBox("Паспорт")
         form = QFormLayout(self._detail_box)
+        apply_form_layout(form)
         self._detail_labels: dict[str, QLabel] = {}
         for key, label in [
             ("status", "Статус:"),
@@ -275,7 +287,7 @@ class PassportsScreen(QWidget):
             ("blast_event", "Взрыв:"),
         ]:
             value = QLabel("—")
-            value.setWordWrap(True)
+            configure_wrapping_label(value)
             self._detail_labels[key] = value
             form.addRow(label, value)
 

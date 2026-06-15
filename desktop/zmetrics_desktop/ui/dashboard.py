@@ -23,7 +23,12 @@ from PySide6.QtWidgets import (
 from zmetrics_desktop.api.zmetrics import ZMetricsApi
 from zmetrics_desktop.models import AnalysisResult, Quarry, Report
 from zmetrics_desktop.ui.charts import HistogramWidget
-from zmetrics_desktop.ui.layout import apply_screen_layout, configure_combo, configure_error_label
+from zmetrics_desktop.ui.layout import (
+    apply_screen_layout,
+    configure_combo,
+    configure_error_label,
+    configure_wrapping_label,
+)
 from zmetrics_desktop.ui.workers import submit
 
 if TYPE_CHECKING:
@@ -42,9 +47,8 @@ class _MetricCard(QFrame):
         self._value.setStyleSheet("font-size: 24px; font-weight: 600;")
         self._value.setMinimumWidth(0)
         caption = QLabel(label)
-        caption.setStyleSheet("color: gray;")
-        caption.setWordWrap(True)
-        caption.setMinimumWidth(0)
+        caption.setStyleSheet("color: #52616f;")
+        configure_wrapping_label(caption)
         layout.addWidget(self._value)
         layout.addWidget(caption)
 
@@ -77,10 +81,12 @@ class DashboardScreen(QWidget):
         refresh = QPushButton("Обновить")
         refresh.clicked.connect(self.refresh)
         header.addWidget(refresh)
+        header.addStretch(1)
+        root.addLayout(header)
+
         self._error_label = QLabel()
         configure_error_label(self._error_label)
-        header.addWidget(self._error_label, stretch=2)
-        root.addLayout(header)
+        root.addWidget(self._error_label)
 
         # Metric cards
         cards = QGridLayout()
