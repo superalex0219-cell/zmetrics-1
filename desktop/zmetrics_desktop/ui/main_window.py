@@ -20,6 +20,8 @@ from PySide6.QtWidgets import (
     QListWidget,
     QMainWindow,
     QMessageBox,
+    QScrollArea,
+    QSizePolicy,
     QStackedWidget,
     QToolBar,
     QVBoxLayout,
@@ -177,7 +179,7 @@ class MainWindow(QMainWindow):
         self._stack = QStackedWidget()
         for nav_label, title in SCREENS:
             self._nav.addItem(nav_label)
-            self._stack.addWidget(self._build_screen(nav_label, title))
+            self._stack.addWidget(self._wrap_screen(self._build_screen(nav_label, title)))
 
         self._nav.currentRowChanged.connect(self._stack.setCurrentIndex)
         self._nav.setCurrentRow(0)
@@ -190,6 +192,20 @@ class MainWindow(QMainWindow):
             self._build_auth_toolbar()
             self._build_sync_status()
             self._load_access()
+
+    def _wrap_screen(self, screen: QWidget) -> QScrollArea:
+        """Keep page contents usable when the main window is narrowed."""
+        screen.setMinimumSize(0, 0)
+        screen.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        scroller = QScrollArea()
+        scroller.setObjectName("pageScroller")
+        scroller.setWidgetResizable(True)
+        scroller.setMinimumSize(0, 0)
+        scroller.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        scroller.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroller.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroller.setWidget(screen)
+        return scroller
 
     def _apply_light_theme(self) -> None:
         self.setStyleSheet(
@@ -311,6 +327,13 @@ class MainWindow(QMainWindow):
             }
             QListWidget::item {
                 padding: 6px 8px;
+            }
+            QScrollArea#pageScroller {
+                background: #f5f7fa;
+                border: 0;
+            }
+            QScrollArea#pageScroller > QWidget > QWidget {
+                background: #f5f7fa;
             }
             """
         )
