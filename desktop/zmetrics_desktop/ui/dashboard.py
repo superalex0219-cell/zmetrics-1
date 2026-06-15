@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QPushButton,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -33,11 +34,16 @@ class _MetricCard(QFrame):
     def __init__(self, label: str) -> None:
         super().__init__()
         self.setFrameShape(QFrame.Shape.StyledPanel)
+        self.setMinimumWidth(0)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         layout = QVBoxLayout(self)
         self._value = QLabel("—")
         self._value.setStyleSheet("font-size: 24px; font-weight: 600;")
+        self._value.setMinimumWidth(0)
         caption = QLabel(label)
         caption.setStyleSheet("color: gray;")
+        caption.setWordWrap(True)
+        caption.setMinimumWidth(0)
         layout.addWidget(self._value)
         layout.addWidget(caption)
 
@@ -57,31 +63,52 @@ class DashboardScreen(QWidget):
         self._quarries: list[Quarry] = []
 
         root = QVBoxLayout(self)
+        root.setContentsMargins(18, 18, 18, 18)
+        root.setSpacing(14)
 
         # Header: quarry selector + refresh
         header = QHBoxLayout()
+        header.setSpacing(12)
         header.addWidget(QLabel("Карьер:"))
         self._quarry_combo = QComboBox()
-        self._quarry_combo.setMinimumWidth(280)
+        self._quarry_combo.setMinimumWidth(160)
+        self._quarry_combo.setSizePolicy(
+            QSizePolicy.Policy.MinimumExpanding,
+            QSizePolicy.Policy.Fixed,
+        )
         self._quarry_combo.currentIndexChanged.connect(self._on_quarry_selected)
-        header.addWidget(self._quarry_combo)
+        header.addWidget(self._quarry_combo, stretch=1)
         refresh = QPushButton("Обновить")
         refresh.clicked.connect(self.refresh)
         header.addWidget(refresh)
-        header.addStretch(1)
         self._error_label = QLabel()
         self._error_label.setStyleSheet("color: #b00;")
-        header.addWidget(self._error_label)
+        self._error_label.setWordWrap(True)
+        self._error_label.setMinimumWidth(0)
+        self._error_label.setSizePolicy(
+            QSizePolicy.Policy.Ignored,
+            QSizePolicy.Policy.Preferred,
+        )
+        header.addWidget(self._error_label, stretch=2)
         root.addLayout(header)
 
         # Metric cards
-        cards = QHBoxLayout()
+        cards = QGridLayout()
+        cards.setHorizontalSpacing(12)
+        cards.setVerticalSpacing(12)
         self._card_quarries = _MetricCard("Карьеры")
         self._card_sections = _MetricCard("Участки")
         self._card_reports = _MetricCard("Отчёты")
         self._card_p80 = _MetricCard("P80 (последний анализ)")
-        for card in (self._card_quarries, self._card_sections, self._card_reports, self._card_p80):
-            cards.addWidget(card)
+        for index, card in enumerate((
+            self._card_quarries,
+            self._card_sections,
+            self._card_reports,
+            self._card_p80,
+        )):
+            cards.addWidget(card, index // 2, index % 2)
+        cards.setColumnStretch(0, 1)
+        cards.setColumnStretch(1, 1)
         root.addLayout(cards)
 
         # Body: histogram + recent reports
@@ -101,8 +128,16 @@ class DashboardScreen(QWidget):
         reports_box.addWidget(self._reports_list, stretch=1)
 
         hist_holder, reports_holder = QWidget(), QWidget()
+        hist_holder.setMinimumWidth(0)
+        reports_holder.setMinimumWidth(0)
         hist_holder.setLayout(hist_box)
         reports_holder.setLayout(reports_box)
+        self._histogram.setMinimumWidth(0)
+        self._reports_list.setMinimumWidth(0)
+        self._reports_list.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Expanding,
+        )
         body.addWidget(hist_holder, 0, 0)
         body.addWidget(reports_holder, 0, 1)
         body.setColumnStretch(0, 3)

@@ -11,6 +11,7 @@ the target OS:
 The macOS run yields ``dist/ZMetrics.app``; build_macos.sh then packages a .dmg.
 """
 from pathlib import Path
+import platform
 
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
@@ -22,10 +23,14 @@ PKG_DIR = PROJECT_DIR / "zmetrics_desktop"
 datas = collect_data_files("zmetrics_desktop", includes=["assets/*"])
 
 # keyring discovers OS backends via entry points; PyInstaller needs them named
-# explicitly. macOS uses the Keychain backend.
-hiddenimports = collect_submodules("keyring.backends") + [
-    "keyring.backends.macOS",
-]
+# explicitly. Keep this platform-scoped; collecting every backend pulls in unrelated
+# Linux/Windows hooks and makes macOS builds much slower.
+if platform.system() == "Darwin":
+    hiddenimports = ["keyring.backends.macOS"]
+elif platform.system() == "Windows":
+    hiddenimports = ["keyring.backends.Windows"]
+else:
+    hiddenimports = collect_submodules("keyring.backends")
 
 # Optional .icns — drop one at zmetrics_desktop/assets/AppIcon.icns to brand the app.
 _icns = PKG_DIR / "assets" / "AppIcon.icns"
@@ -41,7 +46,14 @@ a = Analysis(
     hookspath=[],
     runtime_hooks=[],
     excludes=[
+        "gi",
         "tkinter",
+        "keyring.backends.SecretService",
+        "keyring.backends.Windows",
+        "keyring.backends.chainer",
+        "keyring.backends.kwallet",
+        "keyring.backends.libsecret",
+        "keyring.backends.null",
         "PySide6.QtDBus",
         "PySide6.QtWebEngineCore",
         "PySide6.QtWebEngineWidgets",

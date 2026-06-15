@@ -18,10 +18,7 @@ def human_error(message: str) -> str:
         or "all connection attempts failed" in lowered
         or "failed to establish a new connection" in lowered
     ):
-        return (
-            "Сервер недоступен. Проверьте адрес сервера в разделе "
-            "«Подключение» и убедитесь, что сервер запущен в локальной сети."
-        )
+        return "Сервер недоступен. Проверьте адрес в разделе «Подключение»."
     if "timed out" in lowered or "timeout" in lowered:
         return "Сервер не ответил вовремя. Проверьте сеть и адрес подключения."
     if "nodename nor servname" in lowered or "name or service not known" in lowered:

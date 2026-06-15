@@ -197,6 +197,12 @@ class MainWindow(QMainWindow):
             QMainWindow {
                 background: #f5f7fa;
             }
+            QWidget {
+                color: #203040;
+            }
+            QLabel {
+                color: #203040;
+            }
             QToolBar, QStatusBar {
                 background: #edf2f7;
                 border: 0;
@@ -290,6 +296,17 @@ class MainWindow(QMainWindow):
                 color: #394b5f;
                 padding: 6px 8px;
                 font-weight: 600;
+            }
+            QListWidget {
+                background: #ffffff;
+                border: 1px solid #d7dee8;
+                border-radius: 5px;
+                color: #203040;
+                selection-background-color: #d9ebff;
+                selection-color: #152638;
+            }
+            QListWidget::item {
+                padding: 6px 8px;
             }
             """
         )
